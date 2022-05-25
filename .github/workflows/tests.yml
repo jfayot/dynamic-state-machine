@@ -35,21 +35,6 @@ jobs:
         cd build
         ctest --build-config ${{env.BUILD_TYPE}} --output-on-failure
 
-    - name: Set up Python 3.8 for gcovr
-      uses: actions/setup-python@v2
-      with:
-        python-version: 3.8
-
-    - name: Install gcovr
-      run: |
-        pip install gcovr==5.0
-
     - name: Coverage
-      run: |
-        cd build
-        gcovr -r .. --filter ${{github.workspace}}/include/ --output coverage.txt
-        cat coverage.txt
-
-    - name: Collect code coverage
       run: bash <(curl -s https://codecov.io/bash) || echo "Codecov did not collect coverage reports"
 
