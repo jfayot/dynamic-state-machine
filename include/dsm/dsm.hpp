@@ -85,7 +85,7 @@ namespace dsm
         TIndex m_index;
 
     protected:
-        EventBase(const TIndex& index)
+        explicit EventBase(const TIndex& index)
             : m_index{ index }
         {}
 
@@ -128,7 +128,7 @@ namespace dsm
         TIndex m_index;
 
     protected:
-        TransitionBase(const TIndex& index)
+        explicit TransitionBase(const TIndex& index)
             : m_index{ index }
         {}
 
@@ -381,7 +381,7 @@ namespace dsm
          * @param[in]   index: sub-class type index
          * @details     StateBase ctor
          */
-        StateBase(const TIndex& index)
+        explicit StateBase(const TIndex& index)
             : m_index{ index }
         {}
 
