@@ -177,7 +177,7 @@ namespace dsm
              */
             TCallbackFunc m_cb;
 
-            Transition(const TCallbackFunc& cb)
+            explicit Transition(const TCallbackFunc& cb)
                 : TransitionBase{ Index<EventType>() }
                 , m_cb{ cb }
             {}
@@ -1299,7 +1299,7 @@ namespace dsm
         }
 
     public:
-        StateMachine(const std::string& name)
+        explicit StateMachine(const std::string& name)
             : State<SmType, SmType>{}
             , m_store{ new StoreType() }
         {
