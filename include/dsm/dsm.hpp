@@ -394,6 +394,7 @@ namespace dsm
             for (const auto&[_, transition] : m_transitions)
             {
                 delete transition;
+                transition = nullptr;
             }
 
             for (const auto& region : m_regions)
@@ -401,6 +402,7 @@ namespace dsm
                 for (const auto&[_, child] : region.m_children)
                 {
                     delete child;
+                    child = nullptr;
                 }
             }
 
@@ -643,6 +645,7 @@ namespace dsm
             for (const auto&[_, transition] : m_transitions)
             {
                 delete transition;
+                transition = nullptr;
             }
             m_transitions.clear();
 
@@ -652,6 +655,7 @@ namespace dsm
                 {
                     child->tearDownImpl();
                     delete child;
+                    child = nullptr;
                 }
             }
             m_regions.clear();
