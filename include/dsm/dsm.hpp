@@ -397,9 +397,9 @@ namespace dsm
                 transition = nullptr;
             }
 
-            for (auto& region : m_regions)
+            for (const auto& region : m_regions)
             {
-                for (const auto&[_, child] : region.m_children)
+                for (auto& [_, child] : region.m_children)
                 {
                     delete child;
                     child = nullptr;
