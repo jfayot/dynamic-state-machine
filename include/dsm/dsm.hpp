@@ -649,9 +649,9 @@ namespace dsm
             }
             m_transitions.clear();
 
-            for (auto& region : m_regions)
+            for (const auto& region : m_regions)
             {
-                for (const auto&[_, child] : region.m_children)
+                for (auto& [_, child] : region.m_children)
                 {
                     child->tearDownImpl();
                     delete child;
