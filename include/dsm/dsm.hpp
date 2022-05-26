@@ -391,13 +391,13 @@ namespace dsm
          */
         virtual ~StateBase()
         {
-            for (const auto&[_, transition] : m_transitions)
+            for (auto& [_, transition] : m_transitions)
             {
                 delete transition;
                 transition = nullptr;
             }
 
-            for (const auto& region : m_regions)
+            for (auto& region : m_regions)
             {
                 for (const auto&[_, child] : region.m_children)
                 {
@@ -642,14 +642,14 @@ namespace dsm
                 m_defered.pop();
             }
 
-            for (const auto&[_, transition] : m_transitions)
+            for (auto& [_, transition] : m_transitions)
             {
                 delete transition;
                 transition = nullptr;
             }
             m_transitions.clear();
 
-            for (const auto& region : m_regions)
+            for (auto& region : m_regions)
             {
                 for (const auto&[_, child] : region.m_children)
                 {
