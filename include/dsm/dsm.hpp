@@ -397,7 +397,7 @@ namespace dsm
                 transition = nullptr;
             }
 
-            for (const auto& region : m_regions)
+            for (auto& region : m_regions)
             {
                 for (auto& [_, child] : region.m_children)
                 {
@@ -649,7 +649,7 @@ namespace dsm
             }
             m_transitions.clear();
 
-            for (const auto& region : m_regions)
+            for (auto& region : m_regions)
             {
                 for (auto& [_, child] : region.m_children)
                 {
