@@ -2,6 +2,7 @@
 
 A Dynamic StateMachine where states and transitions are created runtime.
 
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/e05103096d5b4b3995d622a73813d9c0)](https://app.codacy.com/gh/jfayot/Dynamic-State-Machine?utm_source=github.com&utm_medium=referral&utm_content=jfayot/Dynamic-State-Machine&utm_campaign=Badge_Grade_Settings)
 [![GitHub version](https://badge.fury.io/gh/jfayot%2FDynamic-State-Machine.svg)](https://badge.fury.io/gh/jfayot%2FDynamic-State-Machine)
 [![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/jfayot/Dynamic-State-Machine/blob/main/LICENSE)
