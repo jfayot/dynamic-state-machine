@@ -13,7 +13,7 @@ name: CIFuzz
     - name: Run Fuzzers 
       uses: google/oss-fuzz/infra/cifuzz/actions/run_fuzzers@master 
       with: 
-        oss-fuzz-project-name: 'example' 
+        oss-fuzz-project-name: 'Dynamic-State-Machine' 
         language: c++ 
         fuzz-seconds: 600 
     - name: Upload Crash 
