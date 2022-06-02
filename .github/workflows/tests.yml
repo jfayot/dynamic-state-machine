@@ -10,6 +10,7 @@ env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Debug
   CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+  CODACY_PROJECT_TOKEN: ${{ secrets.CODACY_TOKEN }}
 
 jobs:
   build:
@@ -35,6 +36,9 @@ jobs:
         cd build
         ctest --build-config ${{env.BUILD_TYPE}} --output-on-failure
 
-    - name: Coverage
+    - name: Codecov
       run: bash <(curl -s https://codecov.io/bash) || echo "Codecov did not collect coverage reports"
+
+    - name: Codacy
+      run: bash <(curl -Ls https://coverage.codacy.com/get.sh)
 
