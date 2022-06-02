@@ -87,7 +87,7 @@ struct Visitor : IStateVisitor
     bool found = false;
 
     Visitor() {}
-    Visitor(const std::string& state) : searchedState{ state } {}
+    explicit Visitor(const std::string& state) : searchedState{ state } {}
 
     void visit(const StateBase* state) override
     {
