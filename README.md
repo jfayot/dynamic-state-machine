@@ -20,25 +20,25 @@ A Dynamic StateMachine where states and transitions are created runtime.
 
 ## Features
 
-* Flat-style and enclosed-style setup
-* Hierarchical states
-* Entry and exit actions
-* Simple internal and external transitions
-* Transition actions
-* Transition guards conditions
-* State history (deep and shallow)
-* Event processing
-* Event deferring
-* Event posting
-* Orthogonal regions
-* Optional shared storage
-* Visitable
-* Observable (check current active states)
-* Exception handling
-* Platform independent, C++17
-* Header only
-* Fast compile time
-* No external dependencies except STL
+*   Flat-style and enclosed-style setup
+*   Hierarchical states
+*   Entry and exit actions
+*   Simple internal and external transitions
+*   Transition actions
+*   Transition guards conditions
+*   State history (deep and shallow)
+*   Event processing
+*   Event deferring
+*   Event posting
+*   Orthogonal regions
+*   Optional shared storage
+*   Visitable
+*   Observable (check current active states)
+*   Exception handling
+*   Platform independent, C++17
+*   Header only
+*   Fast compile time
+*   No external dependencies except STL
 
 ## Minimal examples
 
@@ -111,4 +111,3 @@ int main() {
     assert(sm.checkStates<s1>());
 }
 ```
-
