@@ -38,7 +38,3 @@ jobs:
 
     - name: Codecov
       run: bash <(curl -s https://codecov.io/bash) || echo "Codecov did not collect coverage reports"
-
-    - name: Codacy
-      run: bash <(curl -Ls https://coverage.codacy.com/get.sh)
-
