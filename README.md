@@ -23,6 +23,7 @@ A Dynamic StateMachine where states and transitions are created runtime.
 *   Flat-style and enclosed-style setup
 *   Hierarchical states
 *   Entry and exit actions
+*   Unlimited number of states and transitions
 *   Simple internal and external transitions
 *   Transition actions
 *   Transition guards conditions
@@ -37,8 +38,8 @@ A Dynamic StateMachine where states and transitions are created runtime.
 *   Exception handling
 *   Platform independent, C++17
 *   Header only
-*   Fast compile time
 *   No external dependencies except STL
+*   Moderate use of templates
 
 ## Minimal examples
 
