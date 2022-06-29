@@ -21,12 +21,12 @@ A Dynamic StateMachine where states and transitions are created runtime.
 ## Features
 
 *   Flat-style and enclosed-style setup
+*   Unlimited number of states and transitions
 *   Hierarchical states
 *   Entry and exit actions
-*   Unlimited number of states and transitions
-*   Simple internal and external transitions
+*   Internal and external transitions
 *   Transition actions
-*   Transition guards conditions
+*   Transition guard conditions
 *   State history (deep and shallow)
 *   Event processing
 *   Event deferring
@@ -43,72 +43,82 @@ A Dynamic StateMachine where states and transitions are created runtime.
 
 ## Minimal examples
 
+Considering the following minimal state machine, it can be coded as follows:
+![minimal](https://raw.githubusercontent.com/jfayot/dynamic-state-machine/main/.github/images/minimal.png)
+
 ### Flat-style StateMachine setup
 
 ```c++
-#include "DynamicStateMachine/StateMachine.hpp"
+#include "dsm/dsm.hpp"
 #include <cassert>
 
 using namespace dsm;
 
 struct e1 : Event<e1> {};
 
-struct minimal : StateMachine<minimal> {
-    minimal() : StateMachine<minimal>{ "minimal" } {}
-};
-
+struct minimal : StateMachine<minimal> {};
 struct s0 : State<s0, minimal> {};
 struct s1 : State<s1, minimal> {};
 
-int main() {
+int main()
+{
     minimal sm;
 
-    sm.addState<s0>("s0", true);
-    sm.addState<s1>("s1");
+    sm.addState<s0, Entry>();
+    sm.addState<s1>();
     sm.addTransition<s0, e1, s1>();
 
     sm.start();
     assert(sm.checkStates<s0>());
+    std::cout << sm << std::endl;
     sm.processEvent(e1{});
     assert(sm.checkStates<s1>());
+    std::cout << sm << std::endl;
 }
 ```
 ### Enclosed-style StateMachine setup
 
 ```c++
-#include "DynamicStateMachine/StateMachine.hpp"
+#include "dsm/dsm.hpp"
 #include <cassert>
 
 using namespace dsm;
 
 struct e1 : Event<e1> {};
 
-struct s0;
-struct s1;
-
-struct minimal : StateMachine<minimal> {
-    minimal() : StateMachine<minimal>{ "minimal" } {}
-    TStates getStates() override {
-        return { createState<s0>("s0", true), createState<s1>("s1") };
-    }
+struct minimal : StateMachine<minimal>
+{
+    TStates getStates() override;
 };
 
-struct s0 : State<s0, minimal> {
-    TTransitions getTransitions() override {
-        return { createTransition<e1, s1>() };
-    }
+struct s0 : State<s0, minimal>
+{
+    TTransitions getTransitions() override;
 };
 
 struct s1 : State<s1, minimal> {};
 
-int main() {
+TStates minimal::getStates()
+{
+    return { createState<s0, Entry>(), createState<s1>() };
+}
+
+TTransitions s0::getTransitions()
+{
+    return { createTransition<e1, s1>() };
+}
+
+int main()
+{
     minimal sm;
 
     sm.setup();
 
     sm.start();
     assert(sm.checkStates<s0>());
+    std::cout << sm << std::endl;
     sm.processEvent(e1{});
     assert(sm.checkStates<s1>());
+    std::cout << sm << std::endl;
 }
 ```

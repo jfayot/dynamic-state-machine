@@ -28,6 +28,7 @@ option(ENABLE_COVERAGE "Enable coverage" ${IS_ROOT_PROJECT})
 add_library(dsm
   INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}/include/dsm/dsm.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/include/dsm/log.hpp
 )
 
 add_library(dsm::dsm ALIAS dsm)
@@ -48,6 +49,7 @@ target_compile_features(dsm
 add_custom_target(DynamicStateMachine
   SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/include/dsm/dsm.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/include/dsm/log.hpp
     ${CMAKE_CURRENT_LIST_DIR}/README.md
     ${CMAKE_CURRENT_LIST_DIR}/LICENSE
     ${CMAKE_CURRENT_LIST_DIR}/.github/workflows/windows.yml
@@ -82,7 +84,7 @@ if(ENABLE_INSTALL)
   include(CMakePackageConfigHelpers)
 
   # generate package's config file
-  configure_package_config_file(${CMAKE_CURRENT_SOURCE_DIR}/Config.cmake.in
+  configure_package_config_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Config.cmake.in
     ${CMAKE_CURRENT_BINARY_DIR}/dsmConfig.cmake
     INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/dsm
   )

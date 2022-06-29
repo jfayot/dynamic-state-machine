@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
+enable_testing()
+
 include(FetchContent)
 FetchContent_Declare(googletest
   QUIET
@@ -15,8 +17,6 @@ set_target_properties(gtest gmock gtest_main gmock_main
   PROPERTIES
     FOLDER googletest
 )
-
-enable_testing()
 
 add_executable(tests
   main.cpp

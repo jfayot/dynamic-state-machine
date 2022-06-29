@@ -1,52 +1,116 @@
-#ifndef STATE_MACHINE_HPP_INCLUDED
-#define STATE_MACHINE_HPP_INCLUDED
+#ifndef DYNAMIC_STATE_MACHINE_INCLUDED_
+#define DYNAMIC_STATE_MACHINE_INCLUDED_
+
+#include "log.hpp"
 
 #include <string>
+#include <sstream>
 #include <ostream>
 #include <functional>
 #include <typeindex>
 #include <map>
 #include <queue>
+#include <optional>
 #include <type_traits>
+
+/**
+ * Test for non-portable GNU extension compatibility.
+ */
+#ifdef __GNUC__
+#define HAS_GNU_EXTENSIONS_
+#endif
+
+/**
+ * cxxabi.h is a non-portable GNU extension.  Only include it if we're compiling against a
+ * GNU library.
+ */
+#ifdef HAS_GNU_EXTENSIONS_
+#include <cxxabi.h>
+#endif
+
+#ifndef DSM_LOGMODULE
+#define DSM_LOGMODULE "dsm"
+#endif
+
+#ifndef DSM_LOGGER
+#define DSM_LOGGER Log::EmtyLogger
+#endif
+
+#define LOG_DSM(severity, error)  Log::Logger<DSM_LOGGER>::GetInstance()->writeLog(DSM_LOGMODULE, severity, error)
+
+#define LOG_DEBUG_DSM(...) { std::stringstream ss; ss << __VA_ARGS__; \
+Log::Logger<DSM_LOGGER>::GetInstance()->writeLog(DSM_LOGMODULE, Log::eDebug, ss.str()); }
+
+#define LOG_INFO_DSM(...)  { std::stringstream ss; ss << __VA_ARGS__; \
+Log::Logger<DSM_LOGGER>::GetInstance()->writeLog(DSM_LOGMODULE, Log::eInfo, ss.str()); }
+
+#define LOG_WARNING_DSM(...) { std::stringstream ss; ss << __VA_ARGS__; \
+Log::Logger<DSM_LOGGER>::GetInstance()->writeLog(DSM_LOGMODULE, Log::eWarning, ss.str()); }
+
+#define LOG_ERROR_DSM(...) { std::stringstream ss; ss << __VA_ARGS__; \
+Log::Logger<DSM_LOGGER>::GetInstance()->writeLog(DSM_LOGMODULE, Log::eError, ss.str()); }
+
+#define LOG_FATAL_DSM(...) { std::stringstream ss; ss << __VA_ARGS__; \
+Log::Logger<DSM_LOGGER>::GetInstance()->writeLog(DSM_LOGMODULE, Log::eFatal, ss.str()); }
 
 namespace dsm
 {
     // Forwarded declarations
+    enum class History;
+    struct Entry;
+    struct NoEntry;
+    class EventBase;
+    template <typename DerivedType>
+    class Event;
     class StateBase;
-    class TransitionBase;
     template <typename DerivedType, typename SmType>
     class State;
     template <typename SmType, typename StoreType>
     class StateMachine;
-
-    // Concepts
-    template <typename ...Ts>
-    using is_empty_pack = std::enable_if_t<0 == sizeof ...(Ts)>;
+    namespace details
+    {
+        class TransitionBase;
+        template <typename EventType>
+        struct Transition;
+        struct PostedTransition;
+        template <typename ExceptionType>
+        std::string nestedWhat(const ExceptionType&);
+    }
 
     // Types aliases
-    using TIndex = std::type_index;
     using TStates = std::vector<StateBase*>;
-    using TTransitions = std::vector<TransitionBase*>;
+    using TTransitions = std::vector<details::TransitionBase*>;
+    using THistory = std::optional<History>;
     template <typename StateType, typename EventType>
-    using TGuard = bool(StateType::*)();
+    using TGuard = bool(StateType::*)(const EventType&);
     template <typename StateType, typename EventType>
     using TAction = void(StateType::*)(const EventType&);
 
-    /**
-     * @brief   Index
-     * @details Transforms Type into type_index for associative containers
-     * @return  Returns the Types's type_index
-     */
-    template <typename Type>
-    static const TIndex Index() { return TIndex(typeid(Type)); }
+    inline std::string what(std::exception_ptr eptr)
+    {
+        if (false == bool(eptr)) throw std::bad_exception();
 
-    /**
-     * @brief   CheckIndex
-     * @details Checks whether Type and provided type_index are matching
-     * @return  True if there's a match, false otherwise
-     */
-    template <typename Type>
-    static constexpr bool CheckIndex(const TIndex& index) { return index == Index<Type>(); }
+        try
+        {
+            std::rethrow_exception(eptr);
+        }
+        catch (const std::exception& ex)
+        {
+            return ex.what() + details::nestedWhat(ex);
+        }
+        catch (const std::string& ex)
+        {
+            return ex;
+        }
+        catch (const char* ex)
+        {
+            return ex;
+        }
+        catch (...)
+        {
+            return "Unknown exception";
+        }
+    }
 
     /**
      * @brief   IStateVisitor
@@ -61,12 +125,14 @@ namespace dsm
      * @brief   History
      * @details History type: either Shallow or Deep history
      */
-    enum class History : std::uint8_t
+    enum class History
     {
-        None = 0,
-        Shallow,
-        Deep
+        Shallow = 0,
+        Deep = 1
     };
+
+    struct Entry : std::true_type {};
+    struct NoEntry : std::false_type {};
 
     /**
      * @brief   EventBase
@@ -75,22 +141,366 @@ namespace dsm
     class EventBase
     {
     private:
+        friend class StateBase;
+
         template <typename DerivedType, typename SmType>
         friend class State;
+
+        template <typename DerivedType>
+        friend class Event;
+
+        friend struct details::PostedTransition;
 
         /**
          * @brief   m_index
          * @details Event's type index
          */
-        TIndex m_index;
+        std::type_index m_index;
 
     protected:
-        explicit EventBase(const TIndex& index)
+        /**
+         * @brief   m_name
+         * @details Event's name
+         */
+        std::string m_name;
+
+        EventBase(const std::type_index& index)
             : m_index{ index }
         {}
 
         virtual ~EventBase() {}
+
+    private:
+        virtual bool apply(details::TransitionBase* pTransition) const = 0;
+
+        virtual EventBase* clone() const = 0;
     };
+
+    // Implementation details (not supposed to be used by client code)
+    namespace details
+    {
+        // Concepts and constraints
+        template <typename ...Ts>
+        using is_empty_pack = std::enable_if_t<0 == sizeof ...(Ts)>;
+
+        template <template<typename...> class BaseType, typename DerivedType>
+        struct is_base_of_template
+        {
+            template <typename ...Ts>
+            static constexpr std::true_type test(const BaseType<Ts...>*);
+            static constexpr std::false_type test(...);
+            using type = decltype(test(std::declval<DerivedType*>()));
+        };
+
+        template <template<typename...> class BaseType, typename DerivedType>
+        using is_base_of_template_t = typename is_base_of_template<BaseType, DerivedType>::type;
+
+        template <typename DerivedType>
+        using is_event_t = is_base_of_template_t<dsm::Event, DerivedType>;
+
+        template <typename DerivedType>
+        inline constexpr bool is_event_v = is_event_t<DerivedType>::value;
+
+        template <typename DerivedType>
+        using is_state_t = is_base_of_template_t<dsm::State, DerivedType>;
+
+        template <typename DerivedType>
+        inline constexpr bool is_state_v = is_state_t<DerivedType>::value;
+
+        template <typename DerivedType>
+        using is_state_machine_t = is_base_of_template_t<dsm::StateMachine, DerivedType>;
+
+        template <typename DerivedType>
+        inline constexpr bool is_state_machine_v = is_state_machine_t<DerivedType>::value;
+
+        template <typename EntryType>
+        inline constexpr bool is_entry_v = std::is_same_v<dsm::Entry, EntryType> || std::is_same_v<dsm::NoEntry, EntryType>;
+
+        template <typename StateType, typename EntryType = dsm::NoEntry>
+        using is_state_def_v = std::enable_if_t<is_state_v<StateType> && is_entry_v<EntryType>, bool>;
+
+        template <typename FirstStateType, typename SecondStateType>
+        struct is_same_state_t
+        {
+            static_assert(is_state_v<FirstStateType>, "FirstStateType must inherit from State");
+            static_assert(is_state_v<SecondStateType>, "SecondStateType must inherit from State");
+            static constexpr bool value = std::is_same_v<typename FirstStateType::Derived, typename SecondStateType::Derived>;
+        };
+
+        template <typename FirstStateType, typename SecondStateType>
+        inline constexpr bool is_same_state_v = is_same_state_t<FirstStateType, SecondStateType>::value;
+
+        // Helpers
+
+        std::string demangle(const char* name)
+        {
+            std::string res;
+            int status{ 0 };
+
+            // Demangle the type name if using non-portable GNU extensions.
+#ifdef HAS_GNU_EXTENSIONS_
+            char* ret = abi::__cxa_demangle(name, nullptr, nullptr, &status);
+            if (ret != nullptr)
+            {
+                res = ret;
+                free(ret);
+            }
+#else
+            res = name;
+#endif
+            
+            return res;
+        }
+
+        /**
+         * @brief   Index
+         * @details Transforms Type into type_index for associative containers
+         * @return  Returns the Types's type_index
+         */
+        template <typename Type>
+        static const std::type_index Index()
+        {
+            static_assert(details::is_event_v<Type> || is_state_v<Type>, "Type must inherit either from Event or State");
+            return std::type_index(typeid(typename Type::Derived));
+        }
+
+        static const std::type_index Index()
+        {
+            return std::type_index(typeid(void));
+        }
+
+        /**
+         * @brief   Name
+         * @details Retrieves Type's name
+         * @return  Returns the Types's name
+         */
+        template <typename Type>
+        static const std::string Name()
+        {
+            static_assert(details::is_event_v<Type> || is_state_v<Type>, "Type must inherit either from Event or State");
+            std::string name = demangle(typeid(Type).name());
+            // Remove 'class' or 'struct' specifiers
+            if (name.substr(0, 6) == "struct") name = name.substr(7);
+            else if (name.substr(0, 5) == "class") name = name.substr(6);
+            return name;
+        }
+
+        /**
+         * @brief   CheckIndex
+         * @details Checks whether Type and provided type_index are matching
+         * @return  True if there's a match, false otherwise
+         */
+        template <typename Type>
+        static constexpr bool CheckIndex(const std::type_index& index)
+        {
+            static_assert(details::is_event_v<Type> || is_state_v<Type>, "Type must inherit either from Event or State");
+            return index == Index<Type>();
+        }
+
+        // Transitions
+
+        /**
+         * @brief   TransitionBase
+         * @details Base class for all transitions. Holds the type index of the final subclass
+         */
+        class TransitionBase
+        {
+        private:
+            friend class dsm::StateBase;
+
+            template <typename DerivedType, typename SmType>
+            friend class dsm::State;
+
+            template <typename SmType, typename StoreType>
+            friend class dsm::StateMachine;
+
+            friend struct PostedTransition;
+
+            /**
+                * @brief   m_srcState
+                * @details The transition's source state
+                */
+            dsm::StateBase* m_srcState = nullptr;
+
+            /**
+                * @brief   m_index
+                * @details Transition's type index
+                */
+            std::type_index m_index;
+
+        protected:
+            TransitionBase(const std::type_index& index)
+                : m_index{ index }
+            {}
+
+            virtual ~TransitionBase() {}
+
+        private:
+            virtual bool exec() { return false; }
+        };
+
+        /**
+         * @brief   Transition
+         * @details CRTP base class. Allows type index initialization
+         */
+        template <typename EventType>
+        struct Transition : public TransitionBase
+        {
+            using TCallbackFunc = std::function<bool(const EventType&)>;
+
+            /**
+             * @brief   m_cb
+             * @details The stored function object
+             */
+            TCallbackFunc m_cb;
+
+            Transition(const TCallbackFunc& cb)
+                : TransitionBase{ Index<EventType>() }
+                , m_cb{ cb }
+            {
+                static_assert(details::is_event_v<EventType>, "EventType must inherit from Event");
+            }
+
+            virtual ~Transition() {}
+
+            /**
+             * @brief   exec
+             * @details Executes the transition with the provided event.
+             */
+            bool exec(const EventType& evt)
+            {
+                return m_cb(evt);
+            }
+        };
+
+        /**
+         * @brief   Transition
+         * @details CRTP base class. Allows type index initialization
+         */
+        template <>
+        struct Transition<void> : public TransitionBase
+        {
+            using TCallbackFunc = std::function<bool()>;
+
+            /**
+             * @brief   m_cb
+             * @details The stored function object
+             */
+            TCallbackFunc m_cb;
+
+            Transition(const TCallbackFunc& cb)
+                : TransitionBase{ Index() }
+                , m_cb{ cb }
+            {}
+
+            virtual ~Transition() {}
+
+            /**
+             * @brief   exec
+             * @details Executes the transition.
+             */
+            bool exec() override
+            {
+                return m_cb();
+            }
+        };
+
+        struct PostedTransition
+        {
+            PostedTransition(dsm::EventBase* evt, bool deferred = false)
+                : m_evt{ evt }
+                , m_deferred{ deferred }
+            {}
+
+            PostedTransition(TransitionBase* transition, bool deferred = false)
+                : m_transition{ transition }
+                , m_deferred{ deferred }
+            {}
+
+            virtual ~PostedTransition()
+            {
+                delete m_evt;
+                m_evt = nullptr;
+                delete m_transition;
+                m_transition = nullptr;
+            }
+
+            dsm::EventBase* m_evt = nullptr;
+
+            TransitionBase* m_transition = nullptr;
+
+            bool m_deferred = false;
+        };
+
+        // Exceptions
+
+        /**
+        * @brief   SmError
+        * @details StateMachine's exception
+        */
+        struct SmError : public std::exception
+        {
+            /**
+            * @brief   m_msg
+            * @details The exception's message
+            */
+            mutable std::string m_msg;
+            std::stringstream m_sstr;
+
+            SmError() = default;
+            virtual ~SmError() = default;
+            SmError(SmError&&) = default;
+            SmError& operator=(SmError&&) = default;
+
+            SmError(const SmError& other)
+            {
+                m_sstr << other.m_sstr.rdbuf();
+            }
+
+            SmError& operator=(const SmError& other)
+            {
+                m_sstr << other.m_sstr.rdbuf();
+                return *this;
+            }
+
+            SmError& operator<<(const char* msg)
+            {
+                m_sstr << msg;
+                return *this;
+            }
+
+            SmError& operator<<(const std::string& msg)
+            {
+                return *this << msg.c_str();
+            }
+
+            /**
+            * @brief   what
+            * @details Retrieves the exception's message
+            */
+            const char* what() const noexcept override
+            {
+                // Storing msg is needed because std::stringstream::str returns a temporary object
+                m_msg = m_sstr.str();
+                return m_msg.c_str();
+            }
+        };
+
+        template <typename ExceptionType>
+        inline std::string nestedWhat(const ExceptionType& ex)
+        {
+            try
+            {
+                std::rethrow_if_nested(ex);
+            }
+            catch (...)
+            {
+                return " (" + what(std::current_exception()) + ")";
+            }
+
+            return {};
+        }
+    }
 
     /**
      * @brief   Event
@@ -99,47 +509,44 @@ namespace dsm
     template <typename DerivedType>
     class Event : public EventBase
     {
+    private:
+        template <typename OtherDerivedType, typename SmType>
+        friend class State;
+
+    public:
+        using Derived = DerivedType;
+
     protected:
         Event() :
-            EventBase{ Index<DerivedType>() }
+            EventBase{ details::Index<DerivedType>() }
         {
-            static_assert(std::is_base_of_v<Event<DerivedType>, DerivedType>);
+            static_assert(std::is_base_of_v<Event<DerivedType>, DerivedType>, "DerivedType must inherit from Event");
+            static_assert(std::is_copy_constructible_v<DerivedType>, "DerivedType must be copy constructible");
+            this->m_name = details::Name<DerivedType>();
         }
 
         virtual ~Event() {}
-    };
-
-    /**
-     * @brief   TransitionBase
-     * @details Base class for all Callbacks. Holds the type index of the final subclass
-     */
-    class TransitionBase
-    {
-    private:
-        friend class StateBase;
-
-        template <typename SmType, typename StoreType>
-        friend class StateMachine;
-
-        /**
-         * @brief   m_index
-         * @details Transition's type index
-         */
-        TIndex m_index;
-
-    protected:
-        explicit TransitionBase(const TIndex& index)
-            : m_index{ index }
-        {}
-
-        virtual ~TransitionBase() {}
 
     private:
-        /**
-         * @brief   execPrepared
-         * @details Executes a prepared callback
-         */
-        virtual void execPrepared() const = 0;
+        DerivedType& derived()
+        {
+            return static_cast<DerivedType&>(*this);
+        }
+
+        const DerivedType& derived() const
+        {
+            return static_cast<const DerivedType&>(*this);
+        }
+
+        EventBase* clone() const override
+        {
+            return new DerivedType(derived());
+        }
+
+        bool apply(details::TransitionBase* pTransition) const override
+        {
+            return static_cast<details::Transition<DerivedType>*>(pTransition)->exec(derived());
+        }
     };
 
     /**
@@ -163,62 +570,40 @@ namespace dsm
         friend class StateMachine;
 
         /**
-         * @brief   Transition
-         * @details CRTP base class. Allows type index initialization
+         * @brief   TransitionData
+         * @details Data associated to a transition
          */
-        template <typename EventType>
-        struct Transition : public TransitionBase
-        {
-            using TCallbackFunc = std::function<void(const EventType&)>;
-
-            /**
-             * @brief   m_cb
-             * @details The stored function object
-             */
-            TCallbackFunc m_cb;
-
-            explicit Transition(const TCallbackFunc& cb)
-                : TransitionBase{ Index<EventType>() }
-                , m_cb{ cb }
-            {}
-
-            virtual ~Transition() {}
-
-            /**
-             * @brief   execPrepared
-             * @details Executes a prepared callback. Default implementation does nothing
-             */
-            virtual void execPrepared() const {}
-        };
-
-        /**
-         * @brief   PreparedTransition
-         * @details Prepared Transition that holds its Event parameter together with the function object to call
-         */
-        template <typename EventType>
-        struct PreparedTransition : public Transition<EventType>
+        struct TransitionData
         {
             /**
-             * @brief   m_evt
-             * @details The stored event
+             * @brief   commonAncestor
+             * @details The common ancestor of both source state and destination state. In the simplest case, this corresponds to the source and destination's parent
              */
-            EventType m_evt;
-
-            PreparedTransition(const typename Transition<EventType>::TCallbackFunc& cb, const EventType& evt)
-                : Transition<EventType>{ cb }
-                , m_evt{ evt }
-            {}
-
-            virtual ~PreparedTransition() {}
+            StateBase* commonAncestor = nullptr;
 
             /**
-             * @brief   execPrepared
-             * @details Executes a prepared callback. Calls the stored function object with the stored event as parameter
+             * @brief   srcOutermost
+             * @details The outermost state containing the source state. In the simplest case, this corresponds to the source state itself
              */
-            void execPrepared() const override
-            {
-                Transition<EventType>::m_cb(m_evt);
-            }
+            StateBase* srcOutermost = nullptr;
+
+            /**
+             * @brief   dstOutermost
+             * @details The outermost state containing the destination state. In the simplest case, this corresponds to the destination state itself
+             */
+            StateBase* dstOutermost = nullptr;
+
+            /**
+             * @brief   src
+             * @details The source state
+             */
+            StateBase* src = nullptr;
+
+            /**
+             * @brief   dst
+             * @details The destination state
+             */
+            StateBase* dst = nullptr;
         };
 
         /**
@@ -227,6 +612,18 @@ namespace dsm
          */
         struct Region
         {
+            /**
+             * @brief   m_index
+             * @details The region's index
+             */
+            int m_index;
+
+            /**
+             * @brief   m_parentState
+             * @details The region's parent state
+             */
+            StateBase* m_parentState = nullptr;
+
             /**
              * @brief   m_entryState
              * @details The entry sub-state
@@ -240,43 +637,256 @@ namespace dsm
             StateBase* m_currentState = nullptr;
 
             /**
-             * @brief   m_lastState
+             * @brief   m_lastVisitedState
              * @details The last visited sub-state
              */
-            StateBase* m_lastState = nullptr;
+            StateBase* m_lastVisitedState = nullptr;
+
+            /**
+             * @brief   m_history
+             * @details The state's history type
+             */
+            THistory m_history = std::nullopt;
 
             /**
              * @brief   m_children
              * @details The sub-states mapped with their type index
              */
-            std::map<TIndex, StateBase*> m_children;
+            std::map<std::type_index, StateBase*> m_children = {};
+
+            /**
+             * @brief   getDescendant
+             * @details Recursively searches for the state with the specified type StateType
+             * @return  Pointer to the found state if any, nullptr otherwise
+             */
+            template <typename StateType>
+            StateType* getDescendant()
+            {
+                // Loop over sub-states
+                for (const auto&[_, child] : m_children)
+                {
+                    auto state = child->template getDescendantImpl<StateType>();
+                    if (state != nullptr) return state;
+                }
+
+                return nullptr;
+            }
+
+            /**
+             * @brief   contains
+             * @details Recursively searches for the provided state
+             * @return  true if state found, false otherwise
+             */
+            bool contains(const StateBase* state) const
+            {
+                for (const auto&[_, child] : m_children)
+                {
+                    if (true == child->contains(state)) return true;
+                }
+
+                return false;
+            }
+
+            /**
+             * @brief   getOutermost
+             * @details Searches into this region the outermost state containg a given inner state, skipping the specified state
+             * @return  Pointer to the outermost state if found, nullptr otherwise
+             */
+            StateBase* getOutermost(const StateBase* innerState, const StateBase* skippedState)
+            {
+                for (const auto&[_, child] : m_children)
+                {
+                    if (child == skippedState) continue;
+                    if (true == child->contains(innerState)) return child;
+                }
+
+                return nullptr;
+            }
+
+            /**
+             * @brief   start
+             * @details Starts this region with the provided event. A specific state to start may be provided in order to bypass the entry point or last visited
+             */
+            void start(const EventBase* evt, bool propagateHistory, StateBase* stateToStart = nullptr)
+            {
+                // Check if we are provided with a particular state to start
+                if (nullptr == stateToStart)
+                {
+                    // If state already visited then restore the last visited state depending on current history type or history propagation 
+                    if (m_lastVisitedState != nullptr && (m_history != std::nullopt || true == propagateHistory)) m_currentState = m_lastVisitedState;
+                    // Otherwise use the entry state
+                    else m_currentState = m_entryState;
+                }
+                else
+                {
+                    // Check if the provided state to start belongs to this region
+                    if (m_children.end() != m_children.find(stateToStart->m_index)) m_currentState = stateToStart;
+                    else m_currentState = nullptr;
+                }
+
+                // Start current sub-state if any
+                if (m_currentState != nullptr) m_currentState->startImpl(evt, Propagate(propagateHistory, this));
+            }
+
+            /**
+             * @brief   stop
+             * @details Stops this region with the provided event
+             */
+            void stop(const EventBase* evt)
+            {
+                // Stop current sub-state if any
+                if (m_currentState != nullptr) m_currentState->stopImpl(evt);
+
+                // Backup last visited sub-state
+                m_lastVisitedState = m_currentState;
+
+                // Reset current sub-state
+                m_currentState = nullptr;
+            }
+
+            /**
+             * @brief   setHistory
+             * @details Sets the history for this region
+             */
+            void setHistory(THistory history)
+            {
+                if (History::Deep == history)
+                {
+                    // Ensure that there is no ancestor nor descendant with deep history
+                    auto res = getDeepAncestorOrDescendant();
+                    if (res != std::nullopt)
+                    {
+                        LOG_ERROR_DSM("Failed to set Deep history on state '<" << m_parentState->name() << ", " << m_index << ">'."
+                            " Deep history already defined in " << std::get<0>(*res) << " state '<" << std::get<1>(*res)->name() << ", " << std::get<2>(*res) << ">'");
+                        return;
+                    }
+                }
+
+                if (History::Shallow == history)
+                {
+                    // Ensure that there is no ancestor with deep history
+                    auto res = getDeepAncestor();
+                    if (res != std::nullopt)
+                    {
+                        LOG_ERROR_DSM("Failed to set Shallow history on state '<" << m_parentState->name() << ", " << m_index << ">'."
+                            " Deep history already defined in ancestor state '<" << res->first->name() << ", " << res->second << ">'");
+                        return;
+                    }
+                }
+
+                // Store history type
+                m_history = history;
+
+                // Reset the last visited state when changing history settings
+                m_lastVisitedState = nullptr;
+            }
+
+            void clearHistory(bool recursive)
+            {
+                m_lastVisitedState = nullptr;
+
+                if (true == recursive)
+                {
+                    for (const auto&[_, child] : m_children)
+                    {
+                        for (const auto&[_, region] : child->m_regions)
+                        {
+                            region->clearHistory(recursive);
+                        }
+                    }
+                }
+            }
+
+            /**
+             * @brief   resetHistory
+             * @details Resets the history for this region and it's children
+             */
+            void resetHistory(bool recursive)
+            {
+                // Reset history
+                m_history = std::nullopt;
+
+                // Reset the last visited state when changing history settings
+                m_lastVisitedState = nullptr;
+
+                if (true == recursive)
+                {
+                    for (const auto&[_, child] : m_children)
+                    {
+                        for (const auto&[_, region] : child->m_regions)
+                        {
+                            region->resetHistory(recursive);
+                        }
+                    }
+                }
+            }
+
+            std::optional<std::tuple<std::string, StateBase*, int>> getDeepAncestorOrDescendant()
+            {
+                if (History::Deep == m_history) return { { "this", m_parentState, m_index } };
+                auto res = getDeepAncestor();
+                if (res != std::nullopt) return { { "ancestor", res->first, res->second } };
+                res = getDeepDescendant();
+                if (res != std::nullopt) return { { "descendant", res->first, res->second } };
+                return std::nullopt;
+            }
+
+            /**
+             * @brief   hasAncestorDeep
+             * @details Checks if any ancestor of this region has a deep history
+             * @return  true if ancestor with deep history found, false otherwise
+             */
+            std::optional<std::pair<StateBase*, int>> getDeepAncestor() const
+            {
+                if (History::Deep == m_history) return { { m_parentState, m_index } };
+                if (m_parentState != nullptr && m_parentState->m_parentRegion != nullptr) return m_parentState->m_parentRegion->getDeepAncestor();
+                return {};
+            }
+
+            /**
+             * @brief   hasDescendantDeep
+             * @details Checks if any descendant of this region has a deep history
+             * @return  true if descendant with deep history found, false otherwise
+             */
+            std::optional<std::pair<StateBase*, int>> getDeepDescendant() const
+            {
+                if (History::Deep == m_history) return { { m_parentState, m_index } };
+
+                for (const auto&[_, child] : m_children)
+                {
+                    for (const auto&[_, region] : child->m_regions)
+                    {
+                        auto res = region->getDeepDescendant();
+                        if (res != std::nullopt) return res;
+                    }
+                }
+
+                return {};
+            }
         };
-        using TRegions = std::vector<Region>;
 
         /**
          * @brief   m_name
          * @details The state's name
          */
-        std::string m_name;
-
-        /**
-         * @brief   m_regionIndex
-         * @details The state's region index it belongs to
-         */
-        int m_regionIndex = 0;
+        std::string m_name = {};
 
         /**
          * @brief   m_index
          * @details The state's type index
          */
-        TIndex m_index;
+        std::type_index m_index;
 
         /**
          * @brief   m_regions
          * @details The state's regions container
          */
-        TRegions m_regions;
+        std::map<int, Region*> m_regions = {};
 
+        /**
+         * @brief   m_entry
+         * @details The state's entry flag
+         */
         bool m_entry = false;
 
         /**
@@ -286,6 +896,18 @@ namespace dsm
          *          - A started state machine won't accept any new state nor transition to be added
          */
         bool m_started = false;
+
+        /**
+         * @brief   m_regionIndex
+         * @details The state's region index
+         */
+        int m_regionIndex = 0;
+
+        /**
+         * @brief   m_parentRegion
+         * @details The state's parent region
+         */
+        Region* m_parentRegion = nullptr;
 
         /**
          * @brief   m_parentState
@@ -306,22 +928,10 @@ namespace dsm
         const EventBase* m_trigEvent = nullptr;
 
         /**
-         * @brief   m_history
-         * @details The state's history activation flag
-         */
-        bool m_history = false;
-
-        /**
          * @brief   m_transitions
          * @details The state's allowed transitions mapped with their event's type index
          */
-        std::map<TIndex, TransitionBase*> m_transitions;
-
-        /**
-         * @brief   m_defered
-         * @details The state's defered events stored as prepared callbacks
-         */
-        mutable std::queue<TransitionBase*> m_defered;
+        std::map<std::type_index, details::TransitionBase*> m_transitions = {};
 
     public:
         /**
@@ -341,6 +951,45 @@ namespace dsm
         }
 
         /**
+         * @brief   contains
+         * @details Recursively searches for the provided state
+         * @return  true if state found, false otherwise
+         */
+        bool contains(const StateBase* state) const
+        {
+            // Check self state
+            if (this == state) return true;
+
+            // Loop over orthogonal regions
+            for (const auto&[_, region] : m_regions)
+            {
+                if (true == region->contains(state)) return true;
+            }
+
+            return false;
+        }
+
+        /**
+         * @brief           dump
+         * @param[in,out]   stream: output stream
+         * @details         Outputs this state to the provided stream
+         * @return          Returns the output stream
+         */
+        std::ostream& dump(std::ostream& stream) const
+        {
+            stream << m_name;
+            if (m_regions.size() > 1) stream << "[";
+            for (std::map<int, Region*>::const_iterator it = m_regions.cbegin(); it != m_regions.cend(); ++it)
+            {
+                if (it->second->m_currentState != nullptr) stream << "->" << *(it->second->m_currentState);
+                if (std::next(it) != m_regions.end()) stream << "|";
+            }
+            if (m_regions.size() > 1) stream << "]";
+
+            return stream;
+        }
+
+        /**
          * @brief           operator<<
          * @param[in,out]   stream: output stream
          * @param[in]       state: state to output
@@ -349,16 +998,7 @@ namespace dsm
          */
         friend std::ostream& operator<<(std::ostream& stream, const StateBase& state)
         {
-            stream << state.m_name;
-            if (state.m_regions.size() > 1) stream << "[";
-            for (TRegions::const_iterator it = state.m_regions.cbegin(); it != state.m_regions.cend(); ++it)
-            {
-                if (it->m_currentState != nullptr) stream << "->" << *(it->m_currentState);
-                if (std::next(it) != state.m_regions.end()) stream << "|";
-            }
-            if (state.m_regions.size() > 1) stream << "]";
-
-            return stream;
+            return state.dump(stream);
         }
 
     private:
@@ -370,9 +1010,9 @@ namespace dsm
         void visitImpl(IStateVisitor& visitor)
         {
             visitor.visit(this);
-            for (const auto& region : m_regions)
+            for (const auto&[_, region] : m_regions)
             {
-                if (region.m_currentState != nullptr) region.m_currentState->visitImpl(visitor);
+                if (region->m_currentState != nullptr) region->m_currentState->visitImpl(visitor);
             }
         }
 
@@ -381,9 +1021,40 @@ namespace dsm
          * @param[in]   index: sub-class type index
          * @details     StateBase ctor
          */
-        explicit StateBase(const TIndex& index)
+        StateBase(const std::type_index& index)
             : m_index{ index }
         {}
+
+        /**
+         * @brief   clearImpl
+         * @details Recursively destro this state and its children
+         */
+        void clearImpl()
+        {
+            for (auto&[_, transition] : m_transitions)
+            {
+                delete transition;
+                transition = nullptr;
+            }
+
+            m_transitions.clear();
+
+            for (auto&[_, region] : m_regions)
+            {
+                for (auto&[_, child] : region->m_children)
+                {
+                    delete child;
+                    child = nullptr;
+                }
+
+                region->m_children.clear();
+
+                delete region;
+                region = nullptr;
+            }
+
+            m_regions.clear();
+        }
 
         /**
          * @brief   ~StateBase
@@ -391,26 +1062,7 @@ namespace dsm
          */
         virtual ~StateBase()
         {
-            for (auto& [_, transition] : m_transitions)
-            {
-                delete transition;
-                transition = nullptr;
-            }
-
-            for (auto& region : m_regions)
-            {
-                for (auto& [_, child] : region.m_children)
-                {
-                    delete child;
-                    child = nullptr;
-                }
-            }
-
-            while (!m_defered.empty())
-            {
-                delete m_defered.front();
-                m_defered.pop();
-            }
+            clearImpl();
         }
 
         /**
@@ -432,26 +1084,35 @@ namespace dsm
          * @details Allows statemachine history setup when overriden by user
          * @return  User defined history
          */
-        virtual History getHistory() { return History::None; }
+        virtual THistory getHistory(int regionIndex) { return {}; }
 
         /**
          * @brief   onEntry
          * @details State's entry job
          */
-        virtual void onEntry() {}
+        virtual void onEntry()
+        {
+            LOG_DEBUG_DSM("Entering state " << m_name << " through event " << (m_trigEvent != nullptr ? m_trigEvent->m_name : "anonymous"));
+        }
 
         /**
          * @brief   onExit
          * @details State's exit job
          */
-        virtual void onExit() {}
+        virtual void onExit()
+        {
+            LOG_DEBUG_DSM("Leaving state " << m_name << " through event " << (m_trigEvent != nullptr ? m_trigEvent->m_name : "anonymous"));
+        }
 
         /**
          * @brief       onError
          * @param[in]   ex: exception causing this call
          * @details     State's error job
          */
-        virtual void onError(std::exception_ptr ex) {}
+        virtual void onError(std::exception_ptr eptr)
+        {
+            LOG_ERROR_DSM(what(eptr));
+        }
 
         /**
          * @brief       startImpl
@@ -464,21 +1125,12 @@ namespace dsm
          *                  - Restores the current sub-state depending on the history flag
          *                  - Recursively starts the current sub-state if any
          */
-        template <typename EventType>
-        inline void startImpl(const EventType& evt)
+        void startImpl(const EventBase* evt, bool propagateHistory, bool recurse = true)
         {
             m_started = true;
 
             // Backup triggering event
             m_trigEvent = evt;
-
-            // Handle deferred events if any
-            while (!m_defered.empty())
-            {
-                m_defered.front()->execPrepared();
-                delete m_defered.front();
-                m_defered.pop();
-            }
 
             try
             {
@@ -491,15 +1143,13 @@ namespace dsm
                 onError(std::current_exception());
             }
 
-            // Loop over orthogonal regions
-            for (auto& region : m_regions)
+            if (true == recurse)
             {
-                // Restore last visited or entry depending on history flag
-                if (m_history && region.m_lastState != nullptr) region.m_currentState = region.m_lastState;
-                else region.m_currentState = region.m_entryState;
-
-                // Start current sub-state if any
-                if (region.m_currentState != nullptr) region.m_currentState->startImpl(evt);
+                // Loop over orthogonal regions
+                for (auto&[_, region] : m_regions)
+                {
+                    region->start(evt, propagateHistory);
+                }
             }
         }
 
@@ -514,23 +1164,15 @@ namespace dsm
          *                  - Resets the current sub-state
          *              - Performs the exit job
          */
-        template <typename EventType>
-        inline void stopImpl(const EventType& evt)
+        void stopImpl(const EventBase* evt)
         {
             // Backup triggering event
             m_trigEvent = evt;
 
             // Loop over orthogonal regions
-            for (auto& region : m_regions)
+            for (auto&[_, region] : m_regions)
             {
-                // Stop current sub-state if any
-                if (region.m_currentState != nullptr) region.m_currentState->stopImpl(evt);
-
-                // Backup last visited sub-state depending on history flag
-                if (m_history) region.m_lastState = region.m_currentState;
-
-                // Reset current sub-state
-                region.m_currentState = nullptr;
+                region->stop(evt);
             }
 
             try
@@ -549,205 +1191,210 @@ namespace dsm
 
         /**
          * @brief       addState
-         * @param[in]   parent: parent state
-         * @param[in]   child: child state
-         * @details     Adds the provided child state to the parent state
+         * @param[in]   parent: the parent state where this state shall be added
+         * @details     Tries to add this state as a child state to the provided parent state in parameter
          */
-        void addState(StateBase* parent, StateBase* child)
+        void addState(StateBase* parent)
         {
-            if (nullptr == parent) throw std::logic_error("Invalid parent state");
-            if (nullptr == child) throw std::logic_error("Invalid child state");
-            if (static_cast<int>(child->m_regionIndex - parent->m_regions.size()) > 1) throw std::logic_error("Invalid region index");
+            // parent cannot be null by design
 
-            if (parent->m_regions.size() <= child->m_regionIndex) parent->m_regions.push_back({});
-            // Add the newly created state to the corresponding region
-            auto res = parent->m_regions[child->m_regionIndex].m_children.insert({ child->m_index, child });
-
-            if (res.second)
+            Region* region{ nullptr };
+            auto itRegion = parent->m_regions.find(m_regionIndex);
+            if (itRegion != parent->m_regions.end())
             {
-                // Define the entry state if needed
-                if (child->m_entry) parent->m_regions[child->m_regionIndex].m_entryState = child;
+                region = itRegion->second;
+
+                // No more than one entry point allowed in a single region
+                if (true == m_entry)
+                {
+                    for (const auto&[_, child] : region->m_children)
+                    {
+                        if (true == child->m_entry)
+                        {
+                            throw details::SmError() << "Failed to add entry point state '" << m_name << "'. The parent's region already has an entry point which is state '" << child->m_name << "'";
+                        }
+                    }
+                }
             }
+            else
+            {
+                region = new Region();
+
+                if (nullptr == region)
+                {
+                    throw details::SmError() << "Failed to create region";
+                }
+
+                parent->m_regions[m_regionIndex] = region;
+
+                // Set the region's index
+                region->m_index = m_regionIndex;
+            }
+
+            // Set the child state's parent region
+            m_parentRegion = region;
+
+            // Set the region's parent state
+            region->m_parentState = parent;
+
+            // Add the newly created state to the corresponding region
+            region->m_children.emplace(m_index, this);
+
+            // Define the entry state if needed
+            if (true == m_entry) region->m_entryState = this;
         }
 
         /**
          * @brief       addTransition
-         * @param[in]   state: state that receives the transition
          * @param[in]   transition: transition to add
-         * @details     Adds the provided transition to the state
+         * @details     Adds the provided transition to its source state
          */
-        void addTransition(StateBase* state, TransitionBase* transition)
+        void addTransition(details::TransitionBase* transition)
         {
-            if (nullptr == state) throw std::logic_error("Invalid state's transition");
-            if (nullptr == transition) throw std::logic_error("Invalid transition");
+            // transition cannot be null by design
+            // source state cannot be null by design
+            StateBase* srcState = transition->m_srcState;
 
             // Add the newly created Transition to the transitions container
-            state->m_transitions.insert({ transition->m_index, transition });
+            auto res = srcState->m_transitions.insert({ transition->m_index, transition });
+
+            if (false == res.second)
+            {
+                throw details::SmError() << "Trying to insert an already existing transition";
+            }
         }
 
+        /**
+         * @brief       setupStatesImpl
+         * @details     Recursively adds the user provided states (through getStates overrides) to the state machine
+         */
         void setupStatesImpl()
         {
-            TStates states = getStates();
-
-            for (const auto& state : states)
+            for (auto& state : getStates())
             {
-                addState(this, state);
+                try
+                {
+                    if (state != nullptr) state->addState(this);
+                }
+                catch (...)
+                {
+                    delete state;
+                    state = nullptr;
+
+                    // State's error job
+                    onError(std::current_exception());
+                }
+
             }
 
-            for (const auto& region : m_regions)
+            for (const auto&[_, region] : m_regions)
             {
-                for (const auto&[_, child] : region.m_children)
+                for (const auto&[_, child] : region->m_children)
                 {
                     child->setupStatesImpl();
                 }
             }
         }
 
+        /**
+         * @brief       setupTransitionsImpl
+         * @details     Recursively adds the user provided transitions (through getTransitions overrides) to the state machine
+         */
         void setupTransitionsImpl()
         {
-            TTransitions transitions = getTransitions();
-
-            for (const auto& transition : transitions)
+            for (auto& transition : getTransitions())
             {
-                addTransition(this, transition);
+                try
+                {
+                    if (transition != nullptr) addTransition(transition);
+                }
+                catch (...)
+                {
+                    delete transition;
+                    transition = nullptr;
+
+                    // State's error job
+                    onError(std::current_exception());
+                }
             }
 
-            for (const auto& region : m_regions)
+            for (const auto&[_, region] : m_regions)
             {
-                for (const auto&[_, child] : region.m_children)
+                for (const auto&[_, child] : region->m_children)
                 {
                     child->setupTransitionsImpl();
                 }
             }
         }
 
+        /**
+         * @brief       setupHistoryImpl
+         * @details     Recursively sets the user provided histories (through getHistory overrides) to the state machine
+         */
         void setupHistoryImpl()
         {
-            setHistory(getHistory());
-
-            for (const auto& region : m_regions)
+            for (auto&[index, region] : m_regions)
             {
-                for (const auto&[_, child] : region.m_children)
+                region->setHistory(getHistory(index));
+
+                for (const auto&[_, child] : region->m_children)
                 {
                     child->setupHistoryImpl();
                 }
             }
         }
 
-        void tearDownImpl()
-        {
-            while (!m_defered.empty())
-            {
-                delete m_defered.front();
-                m_defered.pop();
-            }
-
-            for (auto& [_, transition] : m_transitions)
-            {
-                delete transition;
-                transition = nullptr;
-            }
-            m_transitions.clear();
-
-            for (auto& region : m_regions)
-            {
-                for (auto& [_, child] : region.m_children)
-                {
-                    child->tearDownImpl();
-                    delete child;
-                    child = nullptr;
-                }
-            }
-            m_regions.clear();
-        }
-
         /**
-         * @brief   getStateImpl
-         * @details Recursively searches for the state or sub-state with the specified type StateType
+         * @brief   getDescendantImpl
+         * @details Recursively searches downwards in descendants for the state with the specified type StateType
          * @return  Pointer to the found state if any, nullptr otherwise
          */
         template <typename StateType>
-        StateType* getStateImpl()
+        StateType* getDescendantImpl()
         {
-            static_assert(std::is_base_of_v<StateBase, StateType>);
+            static_assert(details::is_state_v<StateType>, "StateType must inherit from State");
 
             // Check self state index
-            if (true == CheckIndex<StateType>(m_index)) return static_cast<StateType*>(this);
+            if (true == details::CheckIndex<StateType>(m_index)) return static_cast<StateType*>(this);
 
             // Loop over orthogonal regions
-            for (const auto& region : m_regions)
+            for (const auto&[_, region] : m_regions)
             {
-                // Loop over sub-states
-                for (const auto&[_, child] : region.m_children)
-                {
-                    // Recursive call
-                    StateType* state = child->template getStateImpl<StateType>();
-                    // Recursive stop condition
-                    if (state != nullptr) return state;
-                }
+                auto state = region->template getDescendant<StateType>();
+                if (state != nullptr) return state;
             }
 
             return nullptr;
         }
 
         /**
-         * @brief   getSubState
-         * @details Searches for the direct sub-state with type StateType
+         * @brief   getAncestorImpl
+         * @details Recursively searches upwards in ancestors for the state with the specified type StateType
          * @return  Pointer to the found state if any, nullptr otherwise
          */
         template <typename StateType>
-        StateBase* getSubState() const
+        StateType* getAncestorImpl()
         {
-            // Loop over orthogonal regions
-            for (const auto& region : m_regions)
-            {
-                // Search for a sub-state with type StateType
-                auto itChild = region.m_children.find(Index<StateType>());
-                if (itChild != region.m_children.end()) return itChild->second;
-            }
+            static_assert(details::is_state_v<StateType>, "StateType must inherit from State");
 
-            return nullptr;
+            // Check self state index
+            if (true == details::CheckIndex<StateType>(m_index)) return static_cast<StateType*>(this);
+
+            // Recurse stop condition
+            if (nullptr == m_parentState) return nullptr;
+
+            // Recurse call
+            return m_parentState->template getAncestorImpl<StateType>();
         }
 
         /**
-         * @brief   hasAncestorTransition
-         * @details Recursively searches upwards (from self to topmost parent) for a transition with the provided type index
-         * @return  true if transition found, false otherwise
+         * @brief   Propagate
+         * @details Helper function that computes the history propagation flag according to previous propagation flag and provided region's history
+         * @return  true if previous propagation flag is true or if provided region has deep history, false otherwise
          */
-        bool hasAncestorTransition(const TIndex& index) const
+        static bool Propagate(bool propagateHistory, const Region* region)
         {
-            // Check if self contains the requested transition index
-            if (m_transitions.end() != m_transitions.find(index)) return true;
-
-            // Recursive stop condition
-            if (nullptr == m_parentState) return false;
-
-            // Recursive call
-            return m_parentState->hasAncestorTransition(index);
-        }
-
-        /**
-         * @brief   hasDescendantTransition
-         * @details Recursively searches downwards (from self to innermost child) for a transition with the provided type index
-         * @return  true if transition found, false otherwise
-         */
-        bool hasDescendantTransition(const TIndex& index) const
-        {
-            // Check if self contains the requested transition index
-            if (m_transitions.end() != m_transitions.find(index)) return true;
-
-            // Loop over orthogonal regions
-            for (const auto& region : m_regions)
-            {
-                // Loop over sub-states
-                for (const auto& [_, child] : region.m_children)
-                {
-                    // Recursive call and stop condition
-                    if (child->hasDescendantTransition(index)) return true;
-                }
-            }
-
-            return false;
+            return true == propagateHistory || History::Deep == region->m_history;
         }
 
         /**
@@ -760,59 +1407,98 @@ namespace dsm
          *              - Enters into destination state
          * @return      true if transition succeeded, false otherwise
          */
-        template <typename EventType>
-        inline bool transitImpl(const EventType& evt, StateBase* dstState)
+        bool transitImpl(const EventBase* evt, const TransitionData& data, bool propagateHistory)
         {
-            // dstState validity checked by caller (pointer validity and dst is a sibling of current)
-
-            // Reference to destination's region index
-            const auto& dstRegion = dstState->m_regionIndex;
-
-            // check we're not already in the destination state
-            if (dstState == m_regions[dstRegion].m_currentState) return false;
-
-            // Exit from current
-            m_regions[dstRegion].m_currentState->stopImpl(evt);
-            // Update the current state with the destination
-            m_regions[dstRegion].m_currentState = dstState;
-            // Enter into new current state
-            m_regions[dstRegion].m_currentState->startImpl(evt);
-
-            return true;
-        }
-
-        /**
-         * @brief       setHistory
-         * param[in]    type: Shallow or Deep history type
-         * param[in]    history: history activation flag
-         * @details     Defines the history flag recursively or not depending on the history type
-         */
-        void setHistory(History type)
-        {
-            if (History::None == type) return;
-
-            // Store history flag
-            m_history = true;
-
-            for (auto& region : m_regions)
+            if (this == data.commonAncestor)
             {
-                // Reset the last visited state when changing history settings
-                region.m_lastState = nullptr;
+                if (data.srcOutermost != nullptr && true == data.srcOutermost->m_started) data.srcOutermost->stopImpl(evt);
+                bool propagate = Propagate(propagateHistory, data.dstOutermost->m_parentRegion);
+                data.dst->startAncestors(evt, data, this, propagate);
+                return true;
+            }
 
-                // Recursive call if Deep history requested
-                if (History::Deep == type)
+            for (const auto&[_, region] : m_regions)
+            {
+                if (region->m_currentState != nullptr)
                 {
-                    for (const auto&[_, child] : region.m_children) child->setHistory(type);
+                    if (true == region->m_currentState->transitImpl(evt, data, Propagate(propagateHistory, region)))
+                        return true;
                 }
             }
+
+            return false;
         }
 
         /**
-         * @brief       postPreparedCallback
-         * param[in]    cb: Prepared Transition to post
-         * @details     Posts a prepared Transition in the top-most state (i.e. StateMachine)
+         * @brief           startAncestors
+         * param[in]        evt: transition's triggering event
+         * param[in]        data: transition's data
+         * param[in]        previousState: previous calling state
+         * param[in,out]    propagateHistory: history propagation flag
+         * @details         Starts the destination state and all its ancestors up to the outermost destination.
+         *                  The starting order is descending from outermost to innermost and takes into account the history propagation flag
          */
-        virtual void postPreparedCallback(TransitionBase* cb) const = 0;
+        void startAncestors(const EventBase* evt, const TransitionData& data, StateBase* previousState, bool& propagateHistory)
+        {
+            // If we've reached the common ancestor, just leave out
+            if (this == data.commonAncestor) return;
+
+            // Move upwards until outermost destination is reached
+            // Don't mutate the history propagation since this is the one from common ancestor
+            this->m_parentState->startAncestors(evt, data, this, propagateHistory);
+
+            bool propagate = Propagate(propagateHistory, m_parentRegion);
+
+            // We've reached the outermost destination. If it's also the destination, then start it
+            if (this == data.dst)
+            {
+                this->m_parentRegion->start(evt, propagate, this);
+                return;
+            }
+
+            this->m_parentRegion->m_currentState = this;
+
+            this->startImpl(evt, false, false);
+
+            for (const auto&[_, region] : this->m_regions)
+            {
+                if (region != previousState->m_parentRegion) region->start(evt, propagate);
+            }
+
+            propagateHistory = propagate;
+        }
+
+        /**
+         * @brief       getTransitionData
+         * param[in]    dst: the destination state
+         * @details     Calculates the transition data for transitions performed from the top state machine.
+         *              In this case, the common ancestor is the first started state containing the destination,
+         *              the source outermost is the current state of the common ancestor,
+         *              and the destination outermost is the common ancestor's child
+         * @return      A non null transition data structure if it could be computed, nullopt otherwise
+         */
+        std::optional<TransitionData> getTransitionData(StateBase* dst)
+        {
+            if (nullptr == this->m_parentState) return std::nullopt;
+            if (false == this->m_parentState->m_started) return this->m_parentState->getTransitionData(dst);
+            auto srcOutermost = this->m_parentRegion->m_currentState;
+            return TransitionData{ this->m_parentState, srcOutermost, this, srcOutermost, dst };
+        }
+
+        /**
+         * @brief       getTransitionData
+         * param[in]    src: the source state
+         * param[in]    dst: the destination state
+         * @details     In this case, the common ancestor is the first state containing both source and destination states
+         * @return      A non null transition data structure if it could be computed, nullopt otherwise
+         */
+        std::optional<TransitionData> getTransitionData(StateBase* src, StateBase* dst)
+        {
+            if (nullptr == this->m_parentState) return std::nullopt;
+            auto srcOutermost = this->m_parentRegion->getOutermost(src, this);
+            if (nullptr == srcOutermost) return this->m_parentState->getTransitionData(src, dst);
+            return TransitionData{ this->m_parentState, srcOutermost, this, src, dst };
+        }
 
         /**
          * @brief       processEventImpl
@@ -822,102 +1508,55 @@ namespace dsm
          *              - If such transition found, execute its callback using the provided event as parameter
          *              - If no transition found, recursively search inside sub-states
          */
-        template <typename EventType>
-        inline void processEventImpl(const EventType& evt) const
+        bool processEventImpl(const EventBase& evt, bool propagateHistory) const
         {
-            static_assert(std::is_base_of_v<Event<EventType>, EventType>);
-
             // Loop over transitions
-            auto it = m_transitions.find(Index<EventType>());
+            auto it = m_transitions.find(evt.m_index);
             if (it != m_transitions.end())
             {
-                // Invoke the corresponding callback
-                static_cast<Transition<EventType>*>(it->second)->m_cb(evt);
-                // Recursive stop condition
-                return;
+                // Invoke the corresponding callback and break recursive chain if successful
+                if (true == evt.apply(it->second)) return true;
             }
 
+            bool result{ false };
+
             // Recursive calls over sub-states if no transition found yet
-            for (const auto& region : m_regions)
+            for (const auto&[_, region] : m_regions)
             {
-                if (region.m_currentState != nullptr) region.m_currentState->processEventImpl(evt);
+                if (region->m_currentState != nullptr)
+                {
+                    result |= region->m_currentState->processEventImpl(evt, Propagate(propagateHistory, region));
+                }
             }
+
+            return result;
         }
 
         /**
-         * @brief       postEventImpl
-         * param[in]    evt: Event to post
-         * @details     Posts the provided event:
-         *              - Searches for a transition with index corresponding with the provided Event's type index
-         *              - If such transition found, post a prepared Transition to the top-sm
-         *              - If no transition found, recursively search inside sub-states
+         * @brief   checkStatesImpl
+         * @details Terminating recursive variadic call
          */
-        template <typename EventType>
-        void postEventImpl(const EventType& evt) const
-        {
-            static_assert(std::is_base_of_v<Event<EventType>, EventType>);
-
-            // Loop over transitions
-            auto it = m_transitions.find(Index<EventType>());
-            if (it != m_transitions.end())
-            {
-                // Post a prepared Transition to the top-sm
-                m_topSm->postPreparedCallback(new PreparedTransition<EventType>{ static_cast<Transition<EventType>*>(it->second)->m_cb, evt });
-                // Recursive stop condition
-                return;
-            }
-
-            // Recursive calls over sub-states if no transition found yet
-            for (const auto& region : m_regions)
-            {
-                for (const auto&[_, child] : region.m_children) child->postEventImpl(evt);
-            }
-        }
-
-        /**
-         * @brief       deferEventImpl
-         * param[in]    evt: Event to defer
-         * @details     Defers the provided event:
-         *              - Searches for a transition with index corresponding with the provided Event's type index
-         *              - If such transition found, add a prepared Transition to the state's defer queue
-         *              - If no transition found, recursively search inside sub-states
-         */
-        template <typename EventType>
-        void deferEventImpl(const EventType& evt) const
-        {
-            static_assert(std::is_base_of_v<Event<EventType>, EventType>);
-
-            // Loop over transitions
-            auto it = m_transitions.find(Index<EventType>());
-            if (it != m_transitions.end())
-            {
-                // Add a prepared Transition to the defered queue
-                m_defered.push(new PreparedTransition<EventType>{ static_cast<Transition<EventType>*>(it->second)->m_cb, evt });
-                // Recursive stop condition
-                return;
-            }
-
-            // Recursive calls over sub-states if no transition found yet
-            for (const auto& region : m_regions)
-            {
-                for (const auto&[idx, child] : region.m_children) child->deferEventImpl(evt);
-            }
-        }
-
-        template <typename ...StateTypes, typename = is_empty_pack<StateTypes...>>
+        template <typename ...StateTypes, typename = details::is_empty_pack<StateTypes...>>
         bool checkStatesImpl(StateBase* previousState = nullptr)
         {
             return m_started;
         }
 
+        /**
+         * @brief   checkStatesImpl
+         * @details Checks wether the provided state in template parameters are active (started)
+         *          Order in which states are provided matters, and there cannot be "holes"
+         */
         template <typename FirstStateType, typename ...OtherStateTypes>
         bool checkStatesImpl(StateBase* previousState = nullptr)
         {
-            auto state = this->template getStateImpl<FirstStateType>();
+            static_assert(details::is_state_v<FirstStateType>, "FirstStateType must inherit from State");
+
+            auto state = this->template getDescendantImpl<FirstStateType>();
             if (nullptr == state) return false;
             if (state == previousState) return false;
             if (!state->m_started) return false;
-            if (previousState != nullptr && state != previousState->m_regions[state->m_regionIndex].m_currentState) return false;
+            if (previousState != nullptr && state->m_parentState != previousState) return false;
             if constexpr (0 == sizeof ...(OtherStateTypes)) return true;
             else return state->template checkStatesImpl<OtherStateTypes...>(state);
         }
@@ -931,62 +1570,26 @@ namespace dsm
     class State : public StateBase
     {
     private:
+        template <typename OtherDerivedType, typename OtherSmType>
+        friend class State;
+
         template <typename OtherSmType, typename StoreType>
         friend class StateMachine;
 
+    public:
+        using Derived = DerivedType;
+
     protected:
         State()
-            : StateBase{ Index<DerivedType>() }
+            : StateBase{ details::Index<DerivedType>() }
         {
-            static_assert(std::is_default_constructible_v<DerivedType>);
-            static_assert(std::is_base_of_v<State<DerivedType, SmType>, DerivedType>);
-            static_assert(std::is_default_constructible_v<DerivedType>);
-            if constexpr (std::is_same_v<DerivedType, SmType>) m_topSm = this;
+            static_assert(std::is_default_constructible_v<DerivedType>, "DerivedType must be default constructible");
+            static_assert(std::is_base_of_v<State<DerivedType, SmType>, DerivedType>, "DerivedType must inherit from State");
+            static_assert(details::is_state_machine_v<SmType>, "SmType must inherit from StateMachine");
+            if constexpr (IsTopSm()) m_topSm = this;
         }
 
         virtual ~State() = default;
-
-    public:
-        /**
-         * @brief   transit
-         * @details Performs the transition to the provided StateType
-         * @return  true if transition succeeded, false otherwise
-         */
-        template <typename DstState>
-        bool transit()
-        {
-            static_assert(std::is_base_of_v<StateBase, DstState>);
-
-            // No possible transition from the top-sm
-            if (m_parentState == nullptr) return false;
-
-            // check that the destination state is a sibling of this state
-            auto dstState = m_parentState->getSubState<DstState>();
-            if (nullptr == dstState) return false;
-
-            // Forward to the transition implementation
-            return m_parentState->transitImpl(nullptr, dstState);
-        }
-
-        /**
-         * @brief   trigEvent
-         * @details Provides the triggering event if any
-         * @return  Pointer to triggering event, or nullptr if none (start case)
-         */
-        template <typename EventType>
-        const EventType* trigEvent() const
-        {
-            static_assert(std::is_base_of_v<Event<EventType>, EventType>);
-
-            // Check triggering event pointer validity and type index match the provided EventType
-            if (m_trigEvent != nullptr && true == CheckIndex<EventType>(m_trigEvent->m_index))
-            {
-                // Return the upcasted event
-                return static_cast<const EventType*>(m_trigEvent);
-            }
-
-            return nullptr;
-        }
 
     private:
         /**
@@ -996,7 +1599,7 @@ namespace dsm
          */
         static constexpr bool IsTopSm()
         {
-            if constexpr (std::is_same_v<DerivedType, SmType>) return true;
+            if constexpr (details::is_same_state_v<DerivedType, SmType>) return true;
             else return false;
         }
 
@@ -1011,40 +1614,39 @@ namespace dsm
         }
 
         /**
-         * @brief       postPreparedCallback
-         * param[in]    cb: Prepared Transition to post
-         * @details     Non top-sm implementation does nothing
-         */
-        virtual void postPreparedCallback(TransitionBase*) const override {}
-
-        /**
          * @brief       createStateImpl
          * param[in]    name: Child state's name
          * param[in]    entry: Flag indicating if the added child state shall be the entry point or not
          * @details     Creates a child state of type ChildState in the provided RegionIndex
          * @return      true if child state added, false otherwise
          */
-        template <typename ParentState, typename ChildState, int RegionIndex>
-        StateBase* createStateImpl(const std::string& name, bool entry)
+        template <typename ChildState, int RegionIndex, typename EntryType>
+        StateBase* createStateImpl(const std::string& name)
         {
-            static_assert(std::is_base_of_v<StateBase, ParentState>);
-            static_assert(std::is_base_of_v<StateBase, ChildState>);
-            static_assert(RegionIndex >= 0);
-
-            // Retrieve and check the parent state
-            auto parentState = topSm()->template getStateImpl<ParentState>();
-            if (nullptr == parentState) return nullptr;
+            static_assert(details::is_entry_v<EntryType>, "EntryType must be either Entry or NoEntry");
+            static_assert(details::is_state_v<ChildState>, "ChildState must inherit from State");
 
             // Don't allow same states at different places in a statemachine
-            if (topSm()->template getStateImpl<ChildState>() != nullptr) return nullptr;
+            auto existingState = topSm()->template getDescendantImpl<ChildState>();
+            if (existingState != nullptr)
+            {
+                throw details::SmError() << "Failed to create state '" << name << "'. It already exists as a child of '" << existingState->m_parentState->name() << "'";
+            }
 
             // Create the new child state and initialize it
             auto child = new ChildState();
-            child->m_name = name;
-            child->m_entry = entry;
-            child->m_parentState = parentState;
-            child->m_regionIndex = RegionIndex;
-            child->m_topSm = m_topSm;
+            if (child != nullptr)
+            {
+                child->m_name = name;
+                child->m_regionIndex = RegionIndex;
+                child->m_entry = EntryType::value;
+                child->m_parentState = this;
+                child->m_topSm = m_topSm;
+            }
+            else
+            {
+                throw details::SmError() << "Failed to create state '" << details::Name<ChildState>() << "'";
+            }
 
             return child;
         }
@@ -1057,53 +1659,205 @@ namespace dsm
          * @return      Pointer to the created transition
          */
         template <typename SrcState, typename EventType, typename StateType, TAction<StateType, EventType> action, TGuard<StateType, EventType> guard, typename DstState>
-        TransitionBase* createTransitionImpl()
+        details::TransitionBase* createTransitionImpl()
         {
-            static_assert(std::is_base_of_v<Event<EventType>, EventType>);
-            static_assert(std::is_base_of_v<StateBase, DstState>);
+            static_assert(details::is_state_v<DstState>, "DstState must inherit from State");
+            static_assert(details::is_state_v<SrcState>, "SrcState must inherit from State");
+            static_assert(details::is_event_v<EventType>, "EventType must inherit from Event");
 
             // Retrieve and check the source state
-            auto srcState = topSm()->template getStateImpl<SrcState>();
-            if (nullptr == srcState) return nullptr;
+            auto srcState = topSm()->template getDescendantImpl<SrcState>();
+            if (nullptr == srcState)
+            {
+                throw details::SmError() << ErrorMessage<SrcState, EventType, DstState>() << "Source state '" << details::Name<SrcState>() << "' not found";
+            }
 
             // Retrieve and check the destination state
-            auto dstState = topSm()->template getStateImpl<DstState>();
-            if (nullptr == dstState) return nullptr;
+            auto dstState = topSm()->template getDescendantImpl<DstState>();
+            if (nullptr == dstState)
+            {
+                throw details::SmError() << ErrorMessage<SrcState, EventType, DstState>() << "Destination state '" << details::Name<DstState>() << "' not found";
+            }
 
             // Retrieve and check the state where the action and guard shall take place
-            auto actionState = topSm()->template getStateImpl<StateType>();
-            if (nullptr == actionState) return nullptr;
-
-            // Source and destination states must have same parent and must belong to same region (no inter-region transitions)
-            // Complex transitions are not yet implemented
-            if (srcState->m_parentState != dstState->m_parentState || srcState->m_regionIndex != dstState->m_regionIndex) return nullptr;
-
-            // Check if the requested transition already exists in ancestors
-            if (srcState->hasAncestorTransition(Index<EventType>())) return nullptr;
-            // Check if the requested transition already exists in descendants
-            if (srcState->hasDescendantTransition(Index<EventType>())) return nullptr;
-
-            auto cb = [srcState, dstState, actionState, actionMember = action, guardMember = guard](const EventType& evt)
+            auto actionState = topSm()->template getDescendantImpl<StateType>();
+            if (nullptr == actionState)
             {
-                try
-                {
-                    if (guardMember != nullptr && false == std::invoke(guardMember, actionState)) return;
-                    if (actionMember != nullptr) std::invoke(actionMember, actionState, evt);
+                throw details::SmError() << ErrorMessage<SrcState, EventType, DstState>() << "Action state '" << details::Name<StateType>() << "' not found";
+            }
 
-                    // If the destination state is different from the source state, the transition from the one to the other happens here
-                    if (static_cast<StateBase*>(srcState) != static_cast<StateBase*>(dstState)) srcState->m_parentState->transitImpl(&evt, dstState);
-                }
-                catch (...)
-                {
-                    // Transitions's error job
-                    srcState->onError(std::current_exception());
-                }
-            };
-            return new Transition<EventType>{ cb };
+            // Check that the action state is a parent of source state, or source state itself
+            if (false == actionState->contains(srcState))
+            {
+                throw details::SmError() << ErrorMessage<SrcState, EventType, DstState>() << "Action state '" << details::Name<StateType>() << "' is not an ancestor of source state '" << details::Name<SrcState>() << "' nor source state itself";
+            }
 
+            details::Transition<EventType>* transition{ nullptr };
+
+            if constexpr (false == details::is_same_state_v<SrcState, DstState>)
+            {
+                auto transitionData = dstState->getTransitionData(srcState, dstState);
+                if (std::nullopt == transitionData)
+                {
+                    throw details::SmError() << ErrorMessage<SrcState, EventType, DstState>() << "Transition impossible. Either crossing regions or source and destination are nested";
+                }
+
+                auto cb = [topSm = m_topSm, data = transitionData.value(), actionState, actionMember = action, guardMember = guard](const EventType& evt)
+                {
+                    try
+                    {
+                        if (guardMember != nullptr && false == std::invoke(guardMember, actionState, evt)) return false;
+                        if (actionMember != nullptr) std::invoke(actionMember, actionState, evt);
+
+                        return topSm->transitImpl(&evt, data, false);
+                    }
+                    catch (...)
+                    {
+                        // Transitions's error job
+                        data.src->onError(std::current_exception());
+                        return false;
+                    }
+                };
+
+                transition = new details::Transition<EventType>{ cb };
+            }
+            else
+            {
+                auto cb = [srcState, actionState, actionMember = action, guardMember = guard](const EventType& evt)
+                {
+                    try
+                    {
+                        if (guardMember != nullptr && false == std::invoke(guardMember, actionState, evt)) return false;
+                        if (actionMember != nullptr) std::invoke(actionMember, actionState, evt);
+
+                        return true;
+                    }
+                    catch (...)
+                    {
+                        // Transitions's error job
+                        srcState->onError(std::current_exception());
+                        return false;
+                    }
+                };
+
+                transition = new details::Transition<EventType>{ cb };
+            }
+
+            transition->m_srcState = srcState;
+
+            return transition;
+        }
+
+        /**
+         * @brief       ErrorMessage
+         * @details     Helper to create an error message related to an impossible transition
+         * @return      The error message
+         */
+        template <typename SrcState, typename EventType, typename DstState>
+        static std::string ErrorMessage()
+        {
+            std::stringstream sstr;
+            sstr << "Failed to create transition '" << details::Name<SrcState>() << "+" << details::Name<EventType>() << "=" << details::Name<DstState>() << "'. ";
+            return sstr.str();
         }
 
     public:
+        /**
+         * @brief   trigEvent
+         * @details Provides the triggering event if any
+         * @return  Pointer to triggering event, or nullptr if none (start case)
+         */
+        template <typename EventType>
+        const EventType* trigEvent() const
+        {
+            static_assert(details::is_event_v<EventType>, "EventType must inherit from Event");
+
+            // Check triggering event pointer validity and type index match the provided EventType
+            if (m_trigEvent != nullptr && true == details::CheckIndex<EventType>(m_trigEvent->m_index))
+            {
+                // Return the upcasted event
+                return static_cast<const EventType*>(m_trigEvent);
+            }
+
+            return nullptr;
+        }
+
+        /**
+         * @brief   clearHistory
+         * @details Clears the last visited state history information for the provided state
+         */
+        template <typename StateType>
+        void clearHistory(bool recursive = false)
+        {
+            auto state = this->template getDescendantImpl<StateType>();
+            if (state != nullptr)
+            {
+                for (auto&[_, region] : state->m_regions)
+                {
+                    region->clearHistory(recursive);
+                }
+            }
+        }
+
+        /**
+         * @brief   clearHistory
+         * @details Clears the last visited state history information for the provided state an region
+         */
+        template <typename StateType, int RegionIndex>
+        void clearHistory(bool recursive = false)
+        {
+            auto state = this->template getDescendantImpl<StateType>();
+            if (state != nullptr)
+            {
+                auto itRegion = state->m_regions.find(RegionIndex);
+                if (itRegion != state->m_regions.end())
+                {
+                    // Clear the last visited state
+                    itRegion->second->clearHistory(recursive);
+                }
+                else
+                {
+                    LOG_ERROR_DSM("Failed to clear history on state '" << state->name() << "' and region " << RegionIndex << ". Region not found");
+                }
+            }
+        }
+
+        /**
+         * @brief   checkStatesImpl
+         * @details Terminating recursive variadic call
+         */
+        template <typename ...StateTypes, typename = details::is_empty_pack<StateTypes...>>
+        bool checkStates()
+        {
+            return false;
+        }
+
+        /**
+         * @brief   checkStatesImpl
+         * @details Checks wether the provided state in template parameters are active (started)
+         *          Order in which states are provided matters, and there cannot be "holes"
+         */
+        template <typename FirstStateType, typename ...OtherStateTypes>
+        bool checkStates()
+        {
+            if (nullptr == m_topSm) return false;
+            if constexpr (details::is_same_state_v<FirstStateType, SmType>)
+                return m_topSm->template checkStatesImpl<OtherStateTypes...>(this->m_topSm);
+            else
+                return m_topSm->template checkStatesImpl<FirstStateType, OtherStateTypes...>();
+        }
+
+        /**
+         * @brief   getAncestor
+         * @details Recursively searches for the state or sub-state with the specified type StateType
+         * @return  Pointer to the found state if any, nullptr otherwise
+         */
+        template <typename StateType>
+        StateType* getAncestor()
+        {
+            return this->template getAncestorImpl<StateType>();
+        }
+
         /**
          * @brief   store
          * @details Provides the state machine's local storage
@@ -1111,7 +1865,7 @@ namespace dsm
          */
         auto store()
         {
-            return topSm() ? topSm()->store() : nullptr;
+            return topSm() != nullptr ? topSm()->store() : nullptr;
         }
 
         /**
@@ -1121,7 +1875,7 @@ namespace dsm
          */
         const auto store() const
         {
-            return topSm() ? topSm()->store() : nullptr;
+            return topSm() != nullptr ? topSm()->store() : nullptr;
         }
 
         /**
@@ -1131,11 +1885,69 @@ namespace dsm
          * @details     Creates a child state of type ChildType to the parent state in the provided RegionIndex. Forwarded to implementation
          * @return      Pointer to the created child state
          */
-        template <typename ChildType, int RegionIndex = 0>
-        StateBase* createState(const std::string& name, bool entry = false)
+        template <typename ChildState, int RegionIndex, typename EntryType, details::is_state_def_v<ChildState, EntryType> = true>
+        StateBase* createState(const std::string& name = details::Name<ChildState>())
         {
-            // Forward to implementation
-            return createStateImpl<DerivedType, ChildType, RegionIndex>(name, entry);
+            try
+            {
+                // Forward to implementation
+                return this->template createStateImpl<ChildState, RegionIndex, EntryType>(name);
+            }
+            catch (...)
+            {
+                // State's error job
+                onError(std::current_exception());
+            }
+
+            return nullptr;
+        }
+
+        /**
+         * @brief       createState
+         * param[in]    name: Child state's name
+         * param[in]    entry: Flag indicating if the added child state shall be the entry point or not
+         * @details     Creates a child state of type ChildType to the parent state in the provided RegionIndex. Forwarded to implementation
+         * @return      Pointer to the created child state
+         */
+        template <typename ChildState, typename EntryType, details::is_state_def_v<ChildState, EntryType> = true>
+        StateBase* createState(const std::string& name = details::Name<ChildState>())
+        {
+            try
+            {
+                // Forward to implementation
+                return this->template createStateImpl<ChildState, 0, EntryType>(name);
+            }
+            catch (...)
+            {
+                // State's error job
+                onError(std::current_exception());
+            }
+
+            return nullptr;
+        }
+
+        /**
+         * @brief       createState
+         * param[in]    name: Child state's name
+         * param[in]    entry: Flag indicating if the added child state shall be the entry point or not
+         * @details     Creates a child state of type ChildType to the parent state in the provided RegionIndex. Forwarded to implementation
+         * @return      Pointer to the created child state
+         */
+        template <typename ChildState, int RegionIndex = 0, details::is_state_def_v<ChildState> = true>
+        StateBase* createState(const std::string& name = details::Name<ChildState>())
+        {
+            try
+            {
+                // Forward to implementation
+                return this->template createStateImpl<ChildState, RegionIndex, NoEntry>(name);
+            }
+            catch (...)
+            {
+                // State's error job
+                onError(std::current_exception());
+            }
+
+            return nullptr;
         }
 
         /**
@@ -1146,11 +1958,22 @@ namespace dsm
          * @return      Pointer to the created transition
          */
         template <typename EventType, typename StateType, TAction<StateType, EventType> action, TGuard<StateType, EventType> guard, typename DstState = DerivedType>
-        TransitionBase* createTransition()
+        details::TransitionBase* createTransition()
         {
-            if (nullptr == action || nullptr == guard) return nullptr;
-            // Forward to implementation
-            return createTransitionImpl<DerivedType, EventType, StateType, action, guard, DstState>();
+            static_assert(action != nullptr && guard != nullptr, "Action and guard cannot be null. Use another template overload");
+
+            try
+            {
+                // Forward to implementation
+                return createTransitionImpl<DerivedType, EventType, StateType, action, guard, DstState>();
+            }
+            catch (...)
+            {
+                // State's error job
+                onError(std::current_exception());
+            }
+
+            return nullptr;
         }
 
         /**
@@ -1160,13 +1983,23 @@ namespace dsm
          * @return      Pointer to the created transition
          */
         template <typename EventType, typename StateType, TAction<StateType, EventType> action, typename DstState>
-        TransitionBase* createTransition()
+        details::TransitionBase* createTransition()
         {
-            static_assert(!std::is_same_v<DerivedType, DstState>);
+            static_assert(action != nullptr, "Action cannot be null. Use another template overload");
+            static_assert(!details::is_same_state_v<DerivedType, DstState>, "Source and Destination cannot be identical. Use another template overload");
 
-            if (nullptr == action) return nullptr;
-            // Forward to implementation
-            return createTransitionImpl<DerivedType, EventType, StateType, action, nullptr, DstState>();
+            try
+            {
+                // Forward to implementation
+                return createTransitionImpl<DerivedType, EventType, StateType, action, nullptr, DstState>();
+            }
+            catch (...)
+            {
+                // State's error job
+                onError(std::current_exception());
+            }
+
+            return nullptr;
         }
 
         /**
@@ -1176,11 +2009,22 @@ namespace dsm
          * @return      Pointer to the created transition
          */
         template <typename EventType, typename StateType, TAction<StateType, EventType> action>
-        TransitionBase* createTransition()
+        details::TransitionBase* createTransition()
         {
-            if (nullptr == action) return nullptr;
-            // Forward to implementation
-            return createTransitionImpl<DerivedType, EventType, StateType, action, nullptr, DerivedType>();
+            static_assert(action != nullptr, "Action cannot be null. Use another template overload");
+
+            try
+            {
+                // Forward to implementation
+                return createTransitionImpl<DerivedType, EventType, StateType, action, nullptr, DerivedType>();
+            }
+            catch (...)
+            {
+                // State's error job
+                onError(std::current_exception());
+            }
+
+            return nullptr;
         }
 
         /**
@@ -1190,13 +2034,23 @@ namespace dsm
          * @return      Pointer to the created transition
          */
         template <typename EventType, typename StateType, TGuard<StateType, EventType> guard, typename DstState>
-        TransitionBase* createTransition()
+        details::TransitionBase* createTransition()
         {
-            static_assert(!std::is_same_v<DerivedType, DstState>);
+            static_assert(guard != nullptr, "Guard cannot be null. Use another template overload");
+            static_assert(!details::is_same_state_v<DerivedType, DstState>, "Source and Destination cannot be identical. Use another template overload");
 
-            if (nullptr == guard) return nullptr;
-            // Forward to implementation
-            return createTransitionImpl<DerivedType, EventType, StateType, nullptr, guard, DstState>();
+            try
+            {
+                // Forward to implementation
+                return createTransitionImpl<DerivedType, EventType, StateType, nullptr, guard, DstState>();
+            }
+            catch (...)
+            {
+                // State's error job
+                onError(std::current_exception());
+            }
+
+            return nullptr;
         }
 
         /**
@@ -1205,12 +2059,94 @@ namespace dsm
          * @return      Pointer to the created transition
          */
         template <typename EventType, typename DstState>
-        TransitionBase* createTransition()
+        details::TransitionBase* createTransition()
         {
-            static_assert(!std::is_same_v<DerivedType, DstState>);
+            static_assert(!details::is_same_state_v<DerivedType, DstState>, "Source and Destination cannot be identical. Use another template overload");
 
-            // Forward to implementation
-            return createTransitionImpl<DerivedType, EventType, DerivedType, nullptr, nullptr, DstState>();
+            try
+            {
+                // Forward to implementation
+                return createTransitionImpl<DerivedType, EventType, DerivedType, nullptr, nullptr, DstState>();
+            }
+            catch (...)
+            {
+                // State's error job
+                onError(std::current_exception());
+            }
+
+            return nullptr;
+        }
+
+        /**
+         * @brief   transit
+         * @details Performs the anonymous transition to the provided DstState
+         */
+        template <typename DstState>
+        void transit()
+        {
+            static_assert(details::is_state_v<DstState>, "DstState must inherit from State");
+
+            if (nullptr == m_topSm) return;
+            if (false == topSm()->started()) return;
+
+            // Retrieve and check the destination state
+            auto dstState = topSm()->template getDescendantImpl<DstState>();
+            if (nullptr == dstState) return;
+            if (true == dstState->m_started) return;
+
+            // Retrieve and check the transition data
+            auto transitionData = (this == m_topSm) ? dstState->getTransitionData(dstState) : dstState->getTransitionData(this, dstState);
+            if (std::nullopt == transitionData) return;
+
+            auto cb = [topSm = m_topSm, data = transitionData.value()]() -> bool
+            {
+                return topSm->transitImpl(nullptr, data, false);
+            };
+
+            if constexpr (IsTopSm())
+            {
+                cb();
+            }
+            else
+            {
+                topSm()->m_postedTransitions.emplace(new details::Transition<void>(cb));
+            }
+        }
+
+        /**
+         * @brief   transit
+         * @details Performs the event triggered transition to the provided DstState
+         */
+        template <typename DstState>
+        void transit(const EventBase& evt)
+        {
+            static_assert(details::is_state_v<DstState>, "DstState must inherit from State");
+
+            if (nullptr == m_topSm) return;
+            if (false == topSm()->started()) return;
+
+            // Retrieve and check the destination state
+            auto dstState = topSm()->template getDescendantImpl<DstState>();
+            if (nullptr == dstState) return;
+            if (true == dstState->m_started) return;
+
+            // Retrieve and check the transition data
+            auto transitionData = (this == m_topSm) ? dstState->getTransitionData(dstState) : dstState->getTransitionData(this, dstState);
+            if (std::nullopt == transitionData) return;
+
+            auto cb = [evt = evt.clone(), topSm = m_topSm, data = transitionData.value()]() -> bool
+            {
+                return topSm->transitImpl(evt, data, false);
+            };
+
+            if constexpr (IsTopSm())
+            {
+                cb();
+            }
+            else
+            {
+                topSm()->m_postedTransitions.emplace(new details::Transition<void>(cb));
+            }
         }
 
         /**
@@ -1221,9 +2157,19 @@ namespace dsm
         template <typename EventType>
         void deferEvent(const EventType& evt) const
         {
-            if (!m_topSm) return;
-            if (!topSm()->started()) return;
-            m_topSm->deferEventImpl(evt);
+            static_assert(details::is_event_v<EventType>, "EventType must inherit from Event");
+
+            if (nullptr == m_topSm) return;
+            if (false == topSm()->started()) return;
+
+            if constexpr (IsTopSm())
+            {
+                if (false == processEventImpl(evt, false)) topSm()->m_postedTransitions.emplace(evt.clone(), true);
+            }
+            else
+            {
+                topSm()->m_postedTransitions.emplace(evt.clone(), true);
+            }
         }
 
         /**
@@ -1235,11 +2181,20 @@ namespace dsm
         template <typename EventType>
         void postEvent(const EventType& evt) const
         {
-            if (!m_topSm) return;
-            if (!topSm()->started()) return;
+            static_assert(details::is_event_v<EventType>, "EventType must inherit from Event");
+
+            if (nullptr == m_topSm) return;
+            if (false == topSm()->started()) return;
+
             // If post from top-sm, it is equivalent to processEvent
-            if constexpr (IsTopSm()) processEventImpl(evt);
-            else m_topSm->postEventImpl(evt);
+            if constexpr (IsTopSm())
+            {
+                processEventImpl(evt, false);
+            }
+            else
+            {
+                topSm()->m_postedTransitions.emplace(evt.clone());
+            }
         }
     };
 
@@ -1259,7 +2214,7 @@ namespace dsm
     class StateMachine : public State<SmType, SmType>
     {
     private:
-        static_assert(std::is_default_constructible_v<StoreType>);
+        static_assert(std::is_default_constructible_v<StoreType>, "StoreType must be default constructible");
 
         template <typename DerivedType, typename OtherSmType>
         friend class State;
@@ -1270,36 +2225,28 @@ namespace dsm
          */
         StoreType* m_store = nullptr;
 
-        /**
-         * @brief   m_posted
-         * @details Posted events stored as a queue of prepared callbacks
-         */
-        mutable std::queue<TransitionBase*> m_posted;
+        mutable std::queue<details::PostedTransition> m_postedTransitions;
 
         /**
-         * @brief       postPreparedCallback
-         * param[in]    cb: Prepared Transition to post
-         * @details     Posts a prepared Transition in the top-most state (i.e. StateMachine)
+         * @brief       Derived
+         * @details     Returns the state machine's derived pointer type
          */
-        virtual void postPreparedCallback(TransitionBase* cb) const override
+        SmType& derived()
         {
-            m_posted.push(cb);
+            return static_cast<SmType&>(*this);
         }
 
-        SmType* Derived()
+        /**
+         * @brief       Derived
+         * @details     Returns the state machine's derived pointer type
+         */
+        const SmType& derived() const
         {
-            return static_cast<SmType*>(this);
+            return static_cast<const SmType&>(*this);
         }
 
     protected:
-        template <typename StateType>
-        StateType* getInnerState()
-        {
-            return this->template getStateImpl<StateType>();
-        }
-
-    public:
-        explicit StateMachine(const std::string& name)
+        StateMachine(const std::string& name = details::Name<SmType>())
             : State<SmType, SmType>{}
             , m_store{ new StoreType() }
         {
@@ -1308,17 +2255,19 @@ namespace dsm
 
         virtual ~StateMachine()
         {
-            tearDown();
+            clear();
             stop();
-            while (!m_posted.empty())
+
+            while (!m_postedTransitions.empty())
             {
-                delete m_posted.front();
-                m_posted.pop();
+                m_postedTransitions.pop();
             }
 
             delete m_store;
+            m_store = nullptr;
         }
 
+    public:
         /**
          * @brief   store
          * @details Provides the state machine's local storage
@@ -1339,6 +2288,11 @@ namespace dsm
             return m_store;
         }
 
+        /**
+         * @brief           visit
+         * @param[in,out]   visitor: applied visitor
+         * @details         Visits the current state and sub-states
+         */
         void visit(IStateVisitor& visitor)
         {
             this->visitImpl(visitor);
@@ -1354,6 +2308,7 @@ namespace dsm
             {
                 if (this->started()) return;
 
+                // Order matters
                 this->setupStatesImpl();
                 this->setupTransitionsImpl();
                 this->setupHistoryImpl();
@@ -1361,7 +2316,7 @@ namespace dsm
             catch (...)
             {
                 // State's error job
-                Derived()->onError(std::current_exception());
+                derived().onError(std::current_exception());
             }
         }
 
@@ -1369,11 +2324,11 @@ namespace dsm
          * @brief   tearDown
          * @details Clears the statemachine: removes all states and transitions
          */
-        void tearDown()
+        void clear()
         {
             if (this->started()) return;
 
-            this->tearDownImpl();
+            this->clearImpl();
         }
 
         /**
@@ -1387,12 +2342,12 @@ namespace dsm
                 if (this->started()) return;
 
                 // Forward to implementation
-                this->startImpl(nullptr);
+                this->startImpl(nullptr, false);
             }
             catch (...)
             {
                 // State's error job
-                Derived()->onError(std::current_exception());
+                derived().onError(std::current_exception());
             }
         }
 
@@ -1412,22 +2367,30 @@ namespace dsm
          * @brief       addState
          * param[in]    name: Child state's name
          * param[in]    entry: Flag indicating if the added child state shall be the entry point or not
-         * @details     Adds a child state of type ChildState to the statemachine itself in the provided RegionIndex
+         * @details     Adds a child state of type ChildState to the provided ParentState in the provided RegionIndex
          */
-        template <typename ChildState, int RegionIndex = 0>
-        void addState(const std::string& name, bool entry = false)
+        template <typename ChildState, int RegionIndex, typename EntryType, details::is_state_def_v<ChildState, EntryType> = true>
+        void addState(const std::string& name = details::Name<ChildState>())
         {
+            static_assert(details::is_state_v<ChildState>, "ChildState must inherit from State");
+            static_assert(details::is_entry_v<EntryType>, "EntryType must be either Entry or NoEntry");
+
             if (this->started()) return;
+
+            StateBase* childState{ nullptr };
 
             try
             {
-                auto childState = this->template createStateImpl<SmType, ChildState, RegionIndex>(name, entry);
-                StateBase::addState(this, childState);
+                childState = this->template createStateImpl<ChildState, RegionIndex, EntryType>(name);
+                childState->addState(this);
             }
             catch (...)
             {
+                delete childState;
+                childState = nullptr;
+
                 // State's error job
-                Derived()->onError(std::current_exception());
+                derived().onError(std::current_exception());
             }
         }
 
@@ -1437,41 +2400,256 @@ namespace dsm
          * param[in]    entry: Flag indicating if the added child state shall be the entry point or not
          * @details     Adds a child state of type ChildState to the provided ParentState in the provided RegionIndex
          */
-        template <typename ParentState, typename ChildState, int RegionIndex = 0>
-        void addState(const std::string& name, bool entry = false)
+        template <typename ChildState, typename EntryType, details::is_state_def_v<ChildState, EntryType> = true>
+        void addState(const std::string& name = details::Name<ChildState>())
         {
+            static_assert(details::is_state_v<ChildState>, "ChildState must inherit from State");
+            static_assert(details::is_entry_v<EntryType>, "EntryType must be either Entry or NoEntry");
+
             if (this->started()) return;
+
+            StateBase* childState{ nullptr };
 
             try
             {
-                auto parentState = this->template getStateImpl<ParentState>();
-                auto childState = this->template createStateImpl<ParentState, ChildState, RegionIndex>(name, entry);
-                StateBase::addState(parentState, childState);
+                childState = this->template createStateImpl<ChildState, 0, EntryType>(name);
+                childState->addState(this);
             }
             catch (...)
             {
+                delete childState;
+                childState = nullptr;
+
                 // State's error job
-                Derived()->onError(std::current_exception());
+                derived().onError(std::current_exception());
             }
         }
 
-        template <History history = History::None>
-        void setHistory()
+        /**
+         * @brief       addState
+         * param[in]    name: Child state's name
+         * param[in]    entry: Flag indicating if the added child state shall be the entry point or not
+         * @details     Adds a child state of type ChildState to the provided ParentState in the provided RegionIndex
+         */
+        template <typename ChildState, int RegionIndex = 0, details::is_state_def_v<ChildState> = true>
+        void addState(const std::string& name = details::Name<ChildState>())
         {
+            static_assert(details::is_state_v<ChildState>, "ChildState must inherit from State");
+
             if (this->started()) return;
 
-            StateBase::setHistory(history);
+            StateBase* childState{ nullptr };
+
+            try
+            {
+                childState = this->template createStateImpl<ChildState, RegionIndex, NoEntry>(name);
+                childState->addState(this);
+            }
+            catch (...)
+            {
+                delete childState;
+                childState = nullptr;
+
+                // State's error job
+                derived().onError(std::current_exception());
+            }
         }
 
-        template <typename StateType, History history = History::None>
-        void setHistory()
+        /**
+         * @brief       addState
+         * param[in]    name: Child state's name
+         * param[in]    entry: Flag indicating if the added child state shall be the entry point or not
+         * @details     Adds a child state of type ChildState to the provided ParentState in the provided RegionIndex
+         */
+        template <typename ParentState, typename ChildState, int RegionIndex, typename EntryType, details::is_state_def_v<ChildState, EntryType> = true>
+        void addState(const std::string& name = details::Name<ChildState>())
         {
-            static_assert(!std::is_same_v<SmType, StateType>);
+            static_assert(details::is_state_v<ParentState>, "ParentState must inherit from State");
+            static_assert(details::is_state_v<ChildState>, "ChildState must inherit from State");
+            static_assert(details::is_entry_v<EntryType>, "EntryType must be either Entry or NoEntry");
 
             if (this->started()) return;
 
-            auto state = this->template getStateImpl<StateType>();
-            if (state != nullptr) state->setHistory(history);
+            StateBase* childState{ nullptr };
+
+            try
+            {
+                auto parentState = this->template getDescendantImpl<ParentState>();
+                if (nullptr == parentState)
+                {
+                    throw details::SmError() << "Failed to add state '" << details::Name<ChildState>() << "'. Parent state '" << details::Name<ParentState>() << "' not found";
+                }
+
+                childState = parentState->template createStateImpl<ChildState, RegionIndex, EntryType>(name);
+                childState->addState(parentState);
+            }
+            catch (...)
+            {
+                delete childState;
+                childState = nullptr;
+
+                // State's error job
+                derived().onError(std::current_exception());
+            }
+        }
+
+        /**
+         * @brief       addState
+         * param[in]    name: Child state's name
+         * param[in]    entry: Flag indicating if the added child state shall be the entry point or not
+         * @details     Adds a child state of type ChildState to the provided ParentState in the provided RegionIndex
+         */
+        template <typename ParentState, typename ChildState, typename EntryType, details::is_state_def_v<ChildState, EntryType> = true>
+        void addState(const std::string& name = details::Name<ChildState>())
+        {
+            static_assert(details::is_state_v<ParentState>, "ParentState must inherit from State");
+            static_assert(details::is_state_v<ChildState>, "ChildState must inherit from State");
+            static_assert(details::is_entry_v<EntryType>, "EntryType must be either Entry or NoEntry");
+
+            if (this->started()) return;
+
+            StateBase* childState{ nullptr };
+
+            try
+            {
+                auto parentState = this->template getDescendantImpl<ParentState>();
+                if (nullptr == parentState)
+                {
+                    throw details::SmError() << "Failed to add state '" << details::Name<ChildState>() << "'. Parent state '" << details::Name<ParentState>() << "' not found";
+                }
+
+                childState = parentState->template createStateImpl<ChildState, 0, EntryType>(name);
+                childState->addState(parentState);
+            }
+            catch (...)
+            {
+                delete childState;
+                childState = nullptr;
+
+                // State's error job
+                derived().onError(std::current_exception());
+            }
+        }
+
+        /**
+         * @brief       addState
+         * param[in]    name: Child state's name
+         * param[in]    entry: Flag indicating if the added child state shall be the entry point or not
+         * @details     Adds a child state of type ChildState to the provided ParentState in the provided RegionIndex
+         */
+        template <typename ParentState, typename ChildState, int RegionIndex = 0, details::is_state_def_v<ChildState> = true>
+        void addState(const std::string& name = details::Name<ChildState>())
+        {
+            static_assert(details::is_state_v<ParentState>, "ParentState must inherit from State");
+            static_assert(details::is_state_v<ChildState>, "ChildState must inherit from State");
+
+            if (this->started()) return;
+
+            StateBase* childState{ nullptr };
+
+            try
+            {
+                auto parentState = this->template getDescendantImpl<ParentState>();
+                if (nullptr == parentState)
+                {
+                    throw details::SmError() << "Failed to add state '" << details::Name<ChildState>() << "'. Parent state '" << details::Name<ParentState>() << "' not found";
+                }
+
+                childState = parentState->template createStateImpl<ChildState, RegionIndex, NoEntry>(name);
+                childState->addState(parentState);
+            }
+            catch (...)
+            {
+                delete childState;
+                childState = nullptr;
+
+                // State's error job
+                derived().onError(std::current_exception());
+            }
+        }
+
+        /**
+         * @brief       setHistory
+         * param[in]    history: history type
+         * @details     Sets the history to the provided StateType
+         */
+        template <typename StateType>
+        void setHistory(History history)
+        {
+            if (this->started()) return;
+
+            auto state = this->template getDescendantImpl<StateType>();
+            if (nullptr == state) return;
+
+            for (auto&[_, region] : state->m_regions)
+            {
+                region->setHistory(history);
+            }
+        }
+
+        /**
+         * @brief       setHistory
+         * param[in]    history: history type
+         * @details     Sets the history to the provided StateType and region
+         */
+        template <typename StateType, int RegionIndex>
+        void setHistory(History history)
+        {
+            if (this->started()) return;
+
+            auto state = this->template getDescendantImpl<StateType>();
+            if (nullptr == state) return;
+
+            auto itRegion = state->m_regions.find(RegionIndex);
+            if (itRegion != state->m_regions.end())
+            {
+                itRegion->second->setHistory(history);
+            }
+            else
+            {
+                LOG_ERROR_DSM("Failed to set history on state '" << state->name() << "' and region " << RegionIndex << ". Region not found");
+            }
+        }
+
+        /**
+         * @brief       resetHistory
+         * @details     Resets the history of the provided StateType
+         */
+        template <typename StateType>
+        void resetHistory(bool recursive = false)
+        {
+            if (this->started()) return;
+
+            auto state = this->template getDescendantImpl<StateType>();
+            if (nullptr == state) return;
+
+            for (auto&[_, region] : state->m_regions)
+            {
+                region->resetHistory(recursive);
+            }
+        }
+
+        /**
+         * @brief       resetHistory
+         * @details     Resets the history of the provided StateType and region
+         */
+        template <typename StateType, int RegionIndex>
+        void resetHistory(bool recursive = false)
+        {
+            if (this->started()) return;
+
+            auto state = this->template getDescendantImpl<StateType>();
+            if (nullptr == state) return;
+
+            auto itRegion = state->m_regions.find(RegionIndex);
+            if (itRegion != state->m_regions.end())
+            {
+                itRegion->second->resetHistory(recursive);
+            }
+            else
+            {
+                LOG_ERROR_DSM("Failed to reset history on state '" << state->name() << "' and region " << RegionIndex << ". Region not found");
+            }
         }
 
         /**
@@ -1483,19 +2661,18 @@ namespace dsm
         template <typename SrcState, typename EventType, typename StateType, TAction<StateType, EventType> action, TGuard<StateType, EventType> guard, typename DstState = SrcState>
         void addTransition()
         {
+            static_assert(action != nullptr && guard != nullptr, "Action and guard cannot be null. Use another template overload");
             if (this->started()) return;
-            if (nullptr == action || nullptr == guard) return;
 
             try
             {
-                auto state = this->template getStateImpl<SrcState>();
                 auto transition = this->template createTransitionImpl<SrcState, EventType, StateType, action, guard, DstState>();
-                StateBase::addTransition(state, transition);
+                StateBase::addTransition(transition);
             }
             catch (...)
             {
                 // State's error job
-                Derived()->onError(std::current_exception());
+                derived().onError(std::current_exception());
             }
         }
 
@@ -1507,21 +2684,20 @@ namespace dsm
         template <typename SrcState, typename EventType, typename StateType, TAction<StateType, EventType> action, typename DstState>
         void addTransition()
         {
-            static_assert(!std::is_same_v<SrcState, DstState>);
+            static_assert(action != nullptr, "Action cannot be null. Use another template overload");
+            static_assert(!details::is_same_state_v<SrcState, DstState>, "Source and Destination cannot be identical. Use another template overload");
 
             if (this->started()) return;
-            if (nullptr == action) return;
 
             try
             {
-                auto state = this->template getStateImpl<SrcState>();
                 auto transition = this->template createTransitionImpl<SrcState, EventType, StateType, action, nullptr, DstState>();
-                StateBase::addTransition(state, transition);
+                StateBase::addTransition(transition);
             }
             catch (...)
             {
                 // State's error job
-                Derived()->onError(std::current_exception());
+                derived().onError(std::current_exception());
             }
         }
 
@@ -1533,19 +2709,19 @@ namespace dsm
         template <typename SrcState, typename EventType, typename StateType, TAction<StateType, EventType> action>
         void addTransition()
         {
+            static_assert(action != nullptr, "Action cannot be null. Use another template overload");
+
             if (this->started()) return;
-            if (nullptr == action) return;
 
             try
             {
-                auto state = this->template getStateImpl<SrcState>();
                 auto transition = this->template createTransitionImpl<SrcState, EventType, StateType, action, nullptr, SrcState>();
-                StateBase::addTransition(state, transition);
+                StateBase::addTransition(transition);
             }
             catch (...)
             {
                 // State's error job
-                Derived()->onError(std::current_exception());
+                derived().onError(std::current_exception());
             }
         }
 
@@ -1557,21 +2733,20 @@ namespace dsm
         template <typename SrcState, typename EventType, typename StateType, TGuard<StateType, EventType> guard, typename DstState>
         void addTransition()
         {
-            static_assert(!std::is_same_v<SrcState, DstState>);
+            static_assert(guard != nullptr, "Guard cannot be null. Use another template overload");
+            static_assert(!details::is_same_state_v<SrcState, DstState>, "Source and Destination cannot be identical. Use another template overload");
 
             if (this->started()) return;
-            if (nullptr == guard) return;
 
             try
             {
-                auto state = this->template getStateImpl<SrcState>();
                 auto transition = this->template createTransitionImpl<SrcState, EventType, StateType, nullptr, guard, DstState>();
-                StateBase::addTransition(state, transition);
+                StateBase::addTransition(transition);
             }
             catch (...)
             {
                 // State's error job
-                Derived()->onError(std::current_exception());
+                derived().onError(std::current_exception());
             }
         }
 
@@ -1582,20 +2757,19 @@ namespace dsm
         template <typename SrcState, typename EventType, typename DstState>
         void addTransition()
         {
-            static_assert(!std::is_same_v<SrcState, DstState>);
+            static_assert(!details::is_same_state_v<SrcState, DstState>, "Source and Destination cannot be identical. Use another template overload");
 
             if (this->started()) return;
 
             try
             {
-                auto state = this->template getStateImpl<SrcState>();
                 auto transition = this->template createTransitionImpl<SrcState, EventType, SrcState, nullptr, nullptr, DstState>();
-                StateBase::addTransition(state, transition);
+                StateBase::addTransition(transition);
             }
             catch (...)
             {
                 // State's error job
-                Derived()->onError(std::current_exception());
+                derived().onError(std::current_exception());
             }
         }
 
@@ -1606,34 +2780,42 @@ namespace dsm
         template <typename EventType>
         void processEvent(const EventType& evt) const
         {
+            static_assert(details::is_event_v<EventType>, "EventType must inherit from Event");
+
             if (!this->started()) return;
 
             // Forward to implementation
-            this->processEventImpl(evt);
+            this->processEventImpl(evt, false);
 
             // Unqueue the posted events and executed the corresponding prepared callbacks
-            while (!m_posted.empty())
+            while (false == m_postedTransitions.empty())
             {
-                m_posted.front()->execPrepared();
-                delete m_posted.front();
-                m_posted.pop();
+                details::PostedTransition& posted = m_postedTransitions.front();
+                if (nullptr == posted.m_transition) // Posted or deferred events
+                {
+                    bool result = this->processEventImpl(*posted.m_evt, false);
+                    if (false == posted.m_deferred || true == result)
+                    {
+                        m_postedTransitions.pop();
+                    }
+                }
+                else // User transition
+                {
+                    posted.m_transition->exec();
+                    m_postedTransitions.pop();
+                }
             }
         }
 
-        template <typename ...StateTypes, typename = is_empty_pack<StateTypes...>>
-        bool checkStates()
+        /**
+         * @brief   getState
+         * @details Recursively searches for the state or sub-state with the specified type StateType
+         * @return  Pointer to the found state if any, nullptr otherwise
+         */
+        template <typename StateType>
+        StateType* getState()
         {
-            return false;
-        }
-
-        template <typename FirstStateType, typename ...OtherStateTypes>
-        bool checkStates()
-        {
-            if constexpr (std::is_same_v<FirstStateType, SmType>)
-            {
-                return this->template checkStatesImpl<OtherStateTypes...>(this->m_topSm);
-            }
-            else return this->template checkStatesImpl<FirstStateType, OtherStateTypes...>();
+            return this->template getDescendantImpl<StateType>();
         }
     };
 }
