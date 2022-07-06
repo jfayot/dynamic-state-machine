@@ -9,7 +9,8 @@
 #include <functional>
 #include <typeindex>
 #include <map>
-#include <queue>
+#include <deque>
+#include <vector>
 #include <optional>
 #include <type_traits>
 
@@ -2109,7 +2110,7 @@ namespace dsm
             }
             else
             {
-                topSm()->m_postedTransitions.emplace(new details::Transition<void>(cb));
+                topSm()->m_postedTransitions.emplace_back(new details::Transition<void>(cb));
             }
         }
 
@@ -2145,7 +2146,7 @@ namespace dsm
             }
             else
             {
-                topSm()->m_postedTransitions.emplace(new details::Transition<void>(cb));
+                topSm()->m_postedTransitions.emplace_back(new details::Transition<void>(cb));
             }
         }
 
@@ -2164,11 +2165,11 @@ namespace dsm
 
             if constexpr (IsTopSm())
             {
-                if (false == processEventImpl(evt, false)) topSm()->m_postedTransitions.emplace(evt.clone(), true);
+                if (false == processEventImpl(evt, false)) topSm()->m_postedTransitions.emplace_back(evt.clone(), true);
             }
             else
             {
-                topSm()->m_postedTransitions.emplace(evt.clone(), true);
+                topSm()->m_postedTransitions.emplace_back(evt.clone(), true);
             }
         }
 
@@ -2193,7 +2194,7 @@ namespace dsm
             }
             else
             {
-                topSm()->m_postedTransitions.emplace(evt.clone());
+                topSm()->m_postedTransitions.emplace_back(evt.clone());
             }
         }
     };
@@ -2225,7 +2226,7 @@ namespace dsm
          */
         StoreType* m_store = nullptr;
 
-        mutable std::queue<details::PostedTransition> m_postedTransitions;
+        mutable std::deque<details::PostedTransition> m_postedTransitions;
 
         /**
          * @brief       Derived
@@ -2258,11 +2259,8 @@ namespace dsm
             clear();
             stop();
 
-            while (!m_postedTransitions.empty())
-            {
-                m_postedTransitions.pop();
-            }
-
+            m_postedTransitions.clear();
+ 
             delete m_store;
             m_store = nullptr;
         }
@@ -2788,21 +2786,26 @@ namespace dsm
             this->processEventImpl(evt, false);
 
             // Unqueue the posted events and executed the corresponding prepared callbacks
-            while (false == m_postedTransitions.empty())
+            auto it = m_postedTransitions.begin();
+            while (it != m_postedTransitions.end())
             {
-                details::PostedTransition& posted = m_postedTransitions.front();
+                details::PostedTransition& posted = *it;
                 if (nullptr == posted.m_transition) // Posted or deferred events
                 {
                     bool result = this->processEventImpl(*posted.m_evt, false);
                     if (false == posted.m_deferred || true == result)
                     {
-                        m_postedTransitions.pop();
+                        it = m_postedTransitions.erase(it);
+                    }
+                    else
+                    {
+                        ++it;
                     }
                 }
                 else // User transition
                 {
                     posted.m_transition->exec();
-                    m_postedTransitions.pop();
+                    it = m_postedTransitions.erase(it);
                 }
             }
         }
