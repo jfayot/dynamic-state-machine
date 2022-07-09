@@ -1,5 +1,6 @@
 ignore:
   - "tests"
+  - "include/dsm/log.hpp"
 
 comment:
   require_changes: true

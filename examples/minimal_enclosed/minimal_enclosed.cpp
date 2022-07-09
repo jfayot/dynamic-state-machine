@@ -5,29 +5,19 @@
 
 using namespace dsm;
 
+struct minimal;
 struct e1 : Event<e1> {};
-
-struct minimal : StateMachine<minimal>
-{
-    TStates getStates() override;
-};
-
-struct s0 : State<s0, minimal>
-{
-    TTransitions getTransitions() override;
-};
-
 struct s1 : State<s1, minimal> {};
-
-TStates minimal::getStates()
-{
-    return { createState<s0, Entry>(), createState<s1>() };
-}
-
-TTransitions s0::getTransitions()
-{
-    return { createTransition<e1, s1>() };
-}
+struct s0 : State<s0, minimal> {
+    TTransitions getTransitions() override {
+        return { createTransition<e1, s1>() };
+    }
+};
+struct minimal : StateMachine<minimal> {
+    TStates getStates() override {
+        return { createState<s0, Entry>(), createState<s1>() };
+    }
+};
 
 int main()
 {
