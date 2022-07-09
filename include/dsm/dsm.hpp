@@ -34,7 +34,7 @@
 #endif
 
 #ifndef DSM_LOGGER
-#define DSM_LOGGER Log::EmtyLogger
+#define DSM_LOGGER Log::EmptyLogger
 #endif
 
 #define LOG_DSM(severity, error)  Log::Logger<DSM_LOGGER>::GetInstance()->writeLog(DSM_LOGMODULE, severity, error)
@@ -74,8 +74,6 @@ namespace dsm
         template <typename EventType>
         struct Transition;
         struct PostedTransition;
-        template <typename ExceptionType>
-        std::string nestedWhat(const ExceptionType&);
     }
 
     // Types aliases
@@ -97,7 +95,7 @@ namespace dsm
         }
         catch (const std::exception& ex)
         {
-            return ex.what() + details::nestedWhat(ex);
+            return ex.what();
         }
         catch (const std::string& ex)
         {
@@ -249,7 +247,7 @@ namespace dsm
 #else
             res = name;
 #endif
-            
+
             return res;
         }
 
@@ -335,9 +333,6 @@ namespace dsm
             {}
 
             virtual ~TransitionBase() {}
-
-        private:
-            virtual bool exec() { return false; }
         };
 
         /**
@@ -400,7 +395,7 @@ namespace dsm
              * @brief   exec
              * @details Executes the transition.
              */
-            bool exec() override
+            bool exec()
             {
                 return m_cb();
             }
@@ -486,21 +481,6 @@ namespace dsm
                 return m_msg.c_str();
             }
         };
-
-        template <typename ExceptionType>
-        inline std::string nestedWhat(const ExceptionType& ex)
-        {
-            try
-            {
-                std::rethrow_if_nested(ex);
-            }
-            catch (...)
-            {
-                return " (" + what(std::current_exception()) + ")";
-            }
-
-            return {};
-        }
     }
 
     /**
@@ -1025,6 +1005,14 @@ namespace dsm
         StateBase(const std::type_index& index)
             : m_index{ index }
         {}
+
+        void setupImpl()
+        {
+            // Order matters
+            this->setupStatesImpl();
+            this->setupTransitionsImpl();
+            this->setupHistoryImpl();
+        }
 
         /**
          * @brief   clearImpl
@@ -1604,6 +1592,13 @@ namespace dsm
             else return false;
         }
 
+        bool isProcessing() const
+        {
+            if (nullptr == m_topSm) return false;
+
+            return topSm()->m_processing;
+        }
+
         /**
          * @brief   topSm
          * @details Provides a pointer to the top-sm
@@ -2078,6 +2073,18 @@ namespace dsm
             return nullptr;
         }
 
+        void preProcess() const
+        {
+            if (nullptr == m_topSm) return;
+            topSm()->m_processing = true;
+        }
+
+        void postProcess() const
+        {
+            if (nullptr == m_topSm) return;
+            topSm()->m_processing = false;
+        }
+
         /**
          * @brief   transit
          * @details Performs the anonymous transition to the provided DstState
@@ -2104,9 +2111,11 @@ namespace dsm
                 return topSm->transitImpl(nullptr, data, false);
             };
 
-            if constexpr (IsTopSm())
+            if (false == isProcessing())
             {
+                preProcess();
                 cb();
+                postProcess();
             }
             else
             {
@@ -2140,9 +2149,11 @@ namespace dsm
                 return topSm->transitImpl(evt, data, false);
             };
 
-            if constexpr (IsTopSm())
+            if (false == isProcessing())
             {
+                preProcess();
                 cb();
+                postProcess();
             }
             else
             {
@@ -2163,9 +2174,11 @@ namespace dsm
             if (nullptr == m_topSm) return;
             if (false == topSm()->started()) return;
 
-            if constexpr (IsTopSm())
+            if (false == isProcessing())
             {
+                preProcess();
                 if (false == processEventImpl(evt, false)) topSm()->m_postedTransitions.emplace_back(evt.clone(), true);
+                postProcess();
             }
             else
             {
@@ -2188,9 +2201,11 @@ namespace dsm
             if (false == topSm()->started()) return;
 
             // If post from top-sm, it is equivalent to processEvent
-            if constexpr (IsTopSm())
+            if (false == isProcessing())
             {
+                preProcess();
                 processEventImpl(evt, false);
+                postProcess();
             }
             else
             {
@@ -2226,6 +2241,8 @@ namespace dsm
          */
         StoreType* m_store = nullptr;
 
+        mutable bool m_processing = false;
+
         mutable std::deque<details::PostedTransition> m_postedTransitions;
 
         /**
@@ -2260,7 +2277,7 @@ namespace dsm
             stop();
 
             m_postedTransitions.clear();
- 
+
             delete m_store;
             m_store = nullptr;
         }
@@ -2306,10 +2323,7 @@ namespace dsm
             {
                 if (this->started()) return;
 
-                // Order matters
-                this->setupStatesImpl();
-                this->setupTransitionsImpl();
-                this->setupHistoryImpl();
+                this->setupImpl();
             }
             catch (...)
             {
@@ -2782,6 +2796,8 @@ namespace dsm
 
             if (!this->started()) return;
 
+            this->preProcess();
+
             // Forward to implementation
             this->processEventImpl(evt, false);
 
@@ -2804,10 +2820,12 @@ namespace dsm
                 }
                 else // User transition
                 {
-                    posted.m_transition->exec();
+                    static_cast<details::Transition<void>*>(posted.m_transition)->exec();
                     it = m_postedTransitions.erase(it);
                 }
             }
+
+            this->postProcess();
         }
 
         /**

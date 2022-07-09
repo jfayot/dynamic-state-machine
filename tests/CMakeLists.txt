@@ -5,8 +5,7 @@ enable_testing()
 include(FetchContent)
 FetchContent_Declare(googletest
   QUIET
-  URL https://github.com/google/googletest/archive/refs/tags/release-1.11.0.tar.gz
-  URL_HASH MD5=E8A8DF240B6938BB6384155D4C37D937
+  URL https://github.com/google/googletest/archive/refs/tags/release-1.12.1.tar.gz
 )
 
 # configure build of googletest
@@ -25,7 +24,8 @@ add_executable(tests
 target_link_libraries(tests
   PRIVATE
     dsm::dsm
-    gmock_main
+    gtest
+    gmock
 )
 
 if (ENABLE_COVERAGE)

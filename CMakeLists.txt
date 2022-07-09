@@ -32,7 +32,7 @@ add_library(dsm
 )
 
 add_library(dsm::dsm ALIAS dsm)
-  
+
 target_include_directories(dsm
   INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -63,7 +63,6 @@ if (BUILD_EXAMPLES)
 endif()
 
 if (BUILD_TESTS)
-  enable_testing()
   add_subdirectory(tests)
 endif()
 

@@ -49,7 +49,7 @@ namespace Log
     {
     private:
         static ILogger* m_logger;
-        
+
     public:
         static ILogger* GetInstance()
         {
@@ -61,7 +61,7 @@ namespace Log
     template <typename LoggerType, typename Tag>
     ILogger* Logger<LoggerType, Tag>::m_logger = nullptr;
 
-    struct EmtyLogger : ILogger
+    struct EmptyLogger : ILogger
     {
         void writeLog(const std::string& module, LogLevel level, const std::string& msg) override {}
     };

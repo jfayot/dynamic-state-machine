@@ -1,3 +1,4 @@
+#define DSM_LOGGER Log::EmptyLogger
 #include "dsm/dsm.hpp"
 
 #include <gtest/gtest.h>
@@ -565,6 +566,21 @@ TEST_F(Common_StateMachine, test_action_with_transit)
     ASSERT_TRUE((_sm.checkStates<s1>()));
 }
 
+TEST_F(Common_StateMachine, test_transit_outside_process)
+{
+    _sm.addState<NiceMock<s0>, Entry>();
+    _sm.addState<NiceMock<s1>>();
+    _sm.addTransition<s0, e0, s0, &s0::onEvent0>();
+
+    s0* _s0 = _sm.getState<s0>();
+    ON_CALL(*_s0, onEvent0(_)).WillByDefault(Invoke([&] () { _s0->transit<s1>(); }));
+
+    _sm.start();
+    _s0->transit<s1>();
+
+    ASSERT_TRUE((_sm.checkStates<s1>()));
+}
+
 TEST_F(Common_StateMachine, test_error_on_entry)
 {
     _sm.addState<NiceMock<s0>, Entry>();
@@ -807,3 +823,10 @@ TEST_F(Common_StateMachine, test_sm_visitor)
     ASSERT_TRUE(v.found);
     ASSERT_TRUE((v.states == std::vector<std::string>{ "sm", "s0", "s1", "s2" }));
 }
+
+int main(int argc, char** argv)
+{
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
+}
+
