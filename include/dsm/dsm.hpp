@@ -9,9 +9,11 @@
 #include <functional>
 #include <typeindex>
 #include <map>
+#include <queue>
 #include <deque>
 #include <vector>
 #include <optional>
+#include <algorithm>
 #include <type_traits>
 
 /**
@@ -167,6 +169,7 @@ namespace dsm
             : m_index{ index }
         {}
 
+    public:
         virtual ~EventBase() {}
 
     private:
@@ -332,6 +335,7 @@ namespace dsm
                 : m_index{ index }
             {}
 
+        public:
             virtual ~TransitionBase() {}
         };
 
@@ -419,6 +423,27 @@ namespace dsm
                 m_evt = nullptr;
                 delete m_transition;
                 m_transition = nullptr;
+            }
+
+            PostedTransition(const PostedTransition&) = delete;
+            PostedTransition& operator=(const PostedTransition&) = delete;
+
+            PostedTransition(PostedTransition&& other)
+            {
+                swap(std::move(other));
+            }
+
+            PostedTransition& operator=(PostedTransition&& other)
+            {
+                swap(std::move(other));
+                return *this;
+            }
+
+            void swap(PostedTransition&& other)
+            {
+                std::swap(m_evt, other.m_evt);
+                std::swap(m_transition, other.m_transition);
+                std::swap(m_deferred, other.m_deferred);
             }
 
             dsm::EventBase* m_evt = nullptr;
@@ -2119,7 +2144,7 @@ namespace dsm
             }
             else
             {
-                topSm()->m_postedTransitions.emplace_back(new details::Transition<void>(cb));
+                topSm()->m_postedTransitions.emplace(new details::Transition<void>(cb));
             }
         }
 
@@ -2157,7 +2182,7 @@ namespace dsm
             }
             else
             {
-                topSm()->m_postedTransitions.emplace_back(new details::Transition<void>(cb));
+                topSm()->m_postedTransitions.emplace(new details::Transition<void>(cb));
             }
         }
 
@@ -2177,12 +2202,12 @@ namespace dsm
             if (false == isProcessing())
             {
                 preProcess();
-                if (false == processEventImpl(evt, false)) topSm()->m_postedTransitions.emplace_back(evt.clone(), true);
+                if (false == processEventImpl(evt, false)) topSm()->m_postedTransitions.emplace(evt.clone(), true);
                 postProcess();
             }
             else
             {
-                topSm()->m_postedTransitions.emplace_back(evt.clone(), true);
+                topSm()->m_postedTransitions.emplace(evt.clone(), true);
             }
         }
 
@@ -2209,7 +2234,7 @@ namespace dsm
             }
             else
             {
-                topSm()->m_postedTransitions.emplace_back(evt.clone());
+                topSm()->m_postedTransitions.emplace(evt.clone());
             }
         }
     };
@@ -2243,7 +2268,8 @@ namespace dsm
 
         mutable bool m_processing = false;
 
-        mutable std::deque<details::PostedTransition> m_postedTransitions;
+        mutable std::deque<details::PostedTransition> m_pendingTransitions;
+        mutable std::queue<details::PostedTransition> m_postedTransitions;
 
         /**
          * @brief       Derived
@@ -2276,7 +2302,11 @@ namespace dsm
             clear();
             stop();
 
-            m_postedTransitions.clear();
+            m_pendingTransitions.clear();
+            while (false == m_postedTransitions.empty())
+            {
+                m_postedTransitions.pop();
+            }
 
             delete m_store;
             m_store = nullptr;
@@ -2801,29 +2831,41 @@ namespace dsm
             // Forward to implementation
             this->processEventImpl(evt, false);
 
-            // Unqueue the posted events and executed the corresponding prepared callbacks
-            auto it = m_postedTransitions.begin();
-            while (it != m_postedTransitions.end())
+            do
             {
-                details::PostedTransition& posted = *it;
-                if (nullptr == posted.m_transition) // Posted or deferred events
+                // Transfer elements from posted to pending
+                while (false == m_postedTransitions.empty())
                 {
-                    bool result = this->processEventImpl(*posted.m_evt, false);
-                    if (false == posted.m_deferred || true == result)
-                    {
-                        it = m_postedTransitions.erase(it);
-                    }
-                    else
-                    {
-                        ++it;
-                    }
+                    m_pendingTransitions.push_back(std::move(m_postedTransitions.front()));
+                    m_postedTransitions.pop();
                 }
-                else // User transition
+
+                // Loop over pending transitions and executed the corresponding callbacks
+                auto it = m_pendingTransitions.begin();
+                while (it != m_pendingTransitions.end())
                 {
-                    static_cast<details::Transition<void>*>(posted.m_transition)->exec();
-                    it = m_postedTransitions.erase(it);
+                    details::PostedTransition& pending = *it;
+                    if (nullptr == pending.m_transition) // Posted or deferred events
+                    {
+                        bool result = this->processEventImpl(*pending.m_evt, false);
+                        if (false == pending.m_deferred || true == result)
+                        {
+                            it = m_pendingTransitions.erase(it);
+                        }
+                        else
+                        {
+                            ++it;
+                        }
+                    }
+                    else // User transition
+                    {
+                        static_cast<details::Transition<void>*>(pending.m_transition)->exec();
+                        it = m_pendingTransitions.erase(it);
+                    }
                 }
             }
+            // Repeat until no more posted transition
+            while (false == m_postedTransitions.empty());
 
             this->postProcess();
         }

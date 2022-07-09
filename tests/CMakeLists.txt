@@ -1,19 +1,24 @@
 cmake_minimum_required(VERSION 3.16)
 
-include(FetchContent)
-FetchContent_Declare(googletest
-  QUIET
-  URL https://github.com/google/googletest/archive/refs/tags/release-1.12.1.tar.gz
-)
+find_package(GTest REQUIRED)
 
 # configure build of googletest
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(googletest)
 
-set_target_properties(gtest gmock gtest_main gmock_main
-  PROPERTIES
-    FOLDER googletest
-)
+if (NOT GTest_FOUND)
+  include(FetchContent)
+  FetchContent_Declare(googletest
+    QUIET
+    URL https://github.com/google/googletest/archive/refs/tags/release-1.12.1.tar.gz
+  )
+
+  FetchContent_MakeAvailable(googletest)
+
+  set_target_properties(gtest gmock gtest_main gmock_main
+    PROPERTIES
+      FOLDER googletest
+  )
+endif()
 
 add_executable(tests
   main.cpp

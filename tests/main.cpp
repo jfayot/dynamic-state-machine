@@ -1,4 +1,3 @@
-#define DSM_LOGGER Log::EmptyLogger
 #include "dsm/dsm.hpp"
 
 #include <gtest/gtest.h>
@@ -63,35 +62,23 @@ struct s2 : State<s2, sm>
     MOCK_METHOD(void, onEntry, ());
     MOCK_METHOD(void, onExit, ());
     MOCK_METHOD(void, onError, (std::exception_ptr));
-    MOCK_METHOD(TStates, getStates, ());
     MOCK_METHOD(TTransitions, getTransitions, ());
 };
 
 struct s3 : State<s3, sm>
 {
-    MOCK_METHOD(void, onEntry, ());
-    MOCK_METHOD(void, onExit, ());
     MOCK_METHOD(void, onError, (std::exception_ptr));
-    MOCK_METHOD(TStates, getStates, ());
     MOCK_METHOD(TTransitions, getTransitions, ());
 };
 
 struct s4 : State<s4, sm>
 {
-    MOCK_METHOD(void, onEntry, ());
-    MOCK_METHOD(void, onExit, ());
     MOCK_METHOD(void, onError, (std::exception_ptr));
-    MOCK_METHOD(TStates, getStates, ());
     MOCK_METHOD(TTransitions, getTransitions, ());
 };
 
 struct s5 : State<s5, sm>
 {
-    MOCK_METHOD(void, onEntry, ());
-    MOCK_METHOD(void, onExit, ());
-    MOCK_METHOD(void, onError, (std::exception_ptr));
-    MOCK_METHOD(TStates, getStates, ());
-    MOCK_METHOD(TTransitions, getTransitions, ());
 };
 
 struct Visitor : IStateVisitor
@@ -577,6 +564,26 @@ TEST_F(Common_StateMachine, test_transit_outside_process)
 
     _sm.start();
     _s0->transit<s1>();
+
+    ASSERT_TRUE((_sm.checkStates<s1>()));
+}
+
+TEST_F(Common_StateMachine, test_post_event_on_entry)
+{
+    _sm.addState<NiceMock<s0>, Entry>();
+    _sm.addState<NiceMock<s1>>();
+    _sm.addTransition<s0, e0, s0, &s0::onEvent0>();
+    _sm.addTransition<s1, e1, s1, &s1::onEvent1>();
+
+    s0* _s0 = _sm.getState<s0>();
+    s1* _s1 = _sm.getState<s1>();
+
+    ON_CALL(*_s0, onEvent0(_)).WillByDefault(Invoke([&] () { _s0->transit<s1>(); }));
+    ON_CALL(*_s1, onEntry()).WillByDefault(Invoke([&] () { _s1->postEvent(e1{}); }));
+    ON_CALL(*_s1, onEvent1(_)).WillByDefault(Invoke([&] () { std::cout << "toto" << std::endl; }));
+
+    _sm.start();
+    _sm.processEvent(e0{});
 
     ASSERT_TRUE((_sm.checkStates<s1>()));
 }
