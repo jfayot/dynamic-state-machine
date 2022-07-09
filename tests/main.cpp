@@ -9,6 +9,7 @@ using ::testing::Invoke;
 using ::testing::InvokeWithoutArgs;
 
 #include <string>
+#include <stdexcept>
 
 using namespace dsm;
 
@@ -16,6 +17,8 @@ struct Store
 {
     std::string data;
 };
+
+struct unknown_error{};
 
 struct e0 : Event<e0>{};
 struct e1 : Event<e1> {};
@@ -82,6 +85,7 @@ struct s6 : State<s6, sm>
     MOCK_METHOD(void, onExit, ());
     MOCK_METHOD(void, onEvent0, (const e0&));
     MOCK_METHOD(void, onEvent1, (const e1&));
+    MOCK_METHOD(void, onEvent2, (const e2&));
     MOCK_METHOD(bool, guard, (const e1&));
 };
 
@@ -642,16 +646,19 @@ TEST_F(Common_StateMachine, test_default_error_handling)
     _sm.addState<NiceMock<s6>, Entry>();
     _sm.addTransition<s6, e0, s6, &s6::onEvent0>();
     _sm.addTransition<s6, e1, s6, &s6::onEvent1, &s6::guard>();
+    _sm.addTransition<s6, e2, s6, &s6::onEvent2>();
 
     s6* _s6 = _sm.getState<s6>();
     ON_CALL(*_s6, onEntry()).WillByDefault(Invoke([&]() { throw "exception on entry"; }));
-    ON_CALL(*_s6, onExit()).WillByDefault(Invoke([&]() { throw "exception on exit"; }));
-    ON_CALL(*_s6, onEvent0(_)).WillByDefault(Invoke([&]() { throw "exception on action"; }));
-    ON_CALL(*_s6, guard(_)).WillByDefault(Invoke([&]() -> bool { throw "exception on guard"; }));
+    ON_CALL(*_s6, onExit()).WillByDefault(Invoke([&]() { throw std::string("exception on exit"); }));
+    ON_CALL(*_s6, onEvent0(_)).WillByDefault(Invoke([&]() { throw std::logic_error("exception on action"); }));
+    ON_CALL(*_s6, guard(_)).WillByDefault(Invoke([&]() -> bool { throw details::SmError() << "exception on guard"; }));
+    ON_CALL(*_s6, onEvent2(_)).WillByDefault(Invoke([&]() { throw unknown_error(); }));
 
     _sm.start();
     _sm.processEvent(e0{});
     _sm.processEvent(e1{});
+    _sm.processEvent(e2{});
 }
 
 TEST_F(Common_StateMachine, test_store)
