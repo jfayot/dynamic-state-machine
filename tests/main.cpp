@@ -89,6 +89,14 @@ struct s6 : State<s6, sm>
     MOCK_METHOD(bool, guard, (const e1&));
 };
 
+struct s7 : State<s7, sm>
+{
+};
+
+struct s8 : State<s8, sm>
+{
+};
+
 struct Visitor : IStateVisitor
 {
     std::string searchedState;
@@ -105,7 +113,7 @@ struct Visitor : IStateVisitor
     }
 };
 
-class Common_StateMachine : public ::testing::Test
+class DsmFixture : public ::testing::Test
 {
     virtual void SetUp() override
     {
@@ -121,7 +129,7 @@ protected:
     NiceMock<sm> _sm;
 };
 
-TEST_F(Common_StateMachine, test_check_states)
+TEST_F(DsmFixture, test_check_states)
 {
     _sm.addState<NiceMock<s0>, Entry>();
     _sm.addState<s0, NiceMock<s1>, Entry>();
@@ -173,7 +181,7 @@ TEST_F(Common_StateMachine, test_check_states)
     ASSERT_TRUE((_sm.checkStates<sm, s0, s1, s2>()));
 }
 
-TEST_F(Common_StateMachine, test_add_existing_state)
+TEST_F(DsmFixture, test_add_existing_state)
 {
     EXPECT_CALL(_sm, onError(_)).Times(2);
     _sm.addState<NiceMock<s0>>();
@@ -184,7 +192,7 @@ TEST_F(Common_StateMachine, test_add_existing_state)
     _sm.setup();
 }
 
-TEST_F(Common_StateMachine, test_add_existing_state_in_ancestor)
+TEST_F(DsmFixture, test_add_existing_state_in_ancestor)
 {
     EXPECT_CALL(_sm, onError(_)).Times(1);
     _sm.addState<NiceMock<s0>>();
@@ -198,7 +206,7 @@ TEST_F(Common_StateMachine, test_add_existing_state_in_ancestor)
     _sm.setup();
 }
 
-TEST_F(Common_StateMachine, test_add_existing_state_in_descendant)
+TEST_F(DsmFixture, test_add_existing_state_in_descendant)
 {
     EXPECT_CALL(_sm, onError(_)).Times(2);
     _sm.addState<NiceMock<s0>>();
@@ -210,7 +218,7 @@ TEST_F(Common_StateMachine, test_add_existing_state_in_descendant)
     _sm.setup();
 }
 
-TEST_F(Common_StateMachine, test_add_existing_transition)
+TEST_F(DsmFixture, test_add_existing_transition)
 {
     EXPECT_CALL(_sm, onError(_)).Times(1);
     _sm.addState<NiceMock<s0>>();
@@ -225,7 +233,7 @@ TEST_F(Common_StateMachine, test_add_existing_transition)
     _sm.setup();
 }
 
-TEST_F(Common_StateMachine, test_add_existing_transition_in_sibling)
+TEST_F(DsmFixture, test_add_existing_transition_in_sibling)
 {
     EXPECT_CALL(_sm, onError(_)).Times(0);
     _sm.addState<NiceMock<s0>>();
@@ -242,7 +250,7 @@ TEST_F(Common_StateMachine, test_add_existing_transition_in_sibling)
     _sm.setup();
 }
 
-TEST_F(Common_StateMachine, test_add_existing_transition_in_ancestor)
+TEST_F(DsmFixture, test_add_existing_transition_in_ancestor)
 {
     EXPECT_CALL(_sm, onError(_)).Times(0);
     _sm.addState<NiceMock<s0>>();
@@ -259,7 +267,7 @@ TEST_F(Common_StateMachine, test_add_existing_transition_in_ancestor)
     _sm.setup();
 }
 
-TEST_F(Common_StateMachine, test_add_existing_transition_in_descendant)
+TEST_F(DsmFixture, test_add_existing_transition_in_descendant)
 {
     EXPECT_CALL(_sm, onError(_)).Times(0);
     _sm.addState<NiceMock<s0>>();
@@ -276,7 +284,7 @@ TEST_F(Common_StateMachine, test_add_existing_transition_in_descendant)
     _sm.setup();
 }
 
-TEST_F(Common_StateMachine, test_add_existing_transition_in_orthogonal_region)
+TEST_F(DsmFixture, test_add_existing_transition_in_orthogonal_region)
 {
     EXPECT_CALL(_sm, onError(_)).Times(0);
     _sm.addState<NiceMock<s0>>();
@@ -295,7 +303,7 @@ TEST_F(Common_StateMachine, test_add_existing_transition_in_orthogonal_region)
     _sm.setup();
 }
 
-TEST_F(Common_StateMachine, test_add_transition_crossing_region)
+TEST_F(DsmFixture, test_add_transition_crossing_region)
 {
     EXPECT_CALL(_sm, onError(_)).Times(1);
     _sm.addState<NiceMock<s0>, 0>();
@@ -309,7 +317,7 @@ TEST_F(Common_StateMachine, test_add_transition_crossing_region)
     _sm.setup();
 }
 
-TEST_F(Common_StateMachine, test_add_transition_to_parent)
+TEST_F(DsmFixture, test_add_transition_to_parent)
 {
     EXPECT_CALL(_sm, onError(_)).Times(1);
     _sm.addState<NiceMock<s0>>();
@@ -323,7 +331,7 @@ TEST_F(Common_StateMachine, test_add_transition_to_parent)
     _sm.setup();
 }
 
-TEST_F(Common_StateMachine, test_add_transition_to_child)
+TEST_F(DsmFixture, test_add_transition_to_child)
 {
     EXPECT_CALL(_sm, onError(_)).Times(1);
     _sm.addState<NiceMock<s0>>();
@@ -337,7 +345,7 @@ TEST_F(Common_StateMachine, test_add_transition_to_child)
     _sm.setup();
 }
 
-TEST_F(Common_StateMachine, test_entry_exit)
+TEST_F(DsmFixture, test_entry_exit)
 {
     _sm.addState<s0, Entry>();
 
@@ -356,7 +364,7 @@ TEST_F(Common_StateMachine, test_entry_exit)
     ASSERT_FALSE(_sm.checkStates<s0>());
 }
 
-TEST_F(Common_StateMachine, test_start_sm_without_initial_state)
+TEST_F(DsmFixture, test_start_sm_without_initial_state)
 {
     _sm.addState<NiceMock<s0>>();
     _sm.addState<NiceMock<s1>>();
@@ -368,7 +376,7 @@ TEST_F(Common_StateMachine, test_start_sm_without_initial_state)
     ASSERT_FALSE(_sm.checkStates<s1>());
 }
 
-TEST_F(Common_StateMachine, test_start_sm_with_initial_state)
+TEST_F(DsmFixture, test_start_sm_with_initial_state)
 {
     _sm.addState<NiceMock<s0>, Entry>();
     _sm.addState<NiceMock<s1>>();
@@ -379,7 +387,7 @@ TEST_F(Common_StateMachine, test_start_sm_with_initial_state)
     ASSERT_FALSE((_sm.checkStates<s1>()));
 }
 
-TEST_F(Common_StateMachine, test_external_transition_not_started)
+TEST_F(DsmFixture, test_external_transition_not_started)
 {
     _sm.addState<NiceMock<s0>, Entry>();
     _sm.addState<NiceMock<s1>>();
@@ -396,7 +404,7 @@ TEST_F(Common_StateMachine, test_external_transition_not_started)
     ASSERT_FALSE(_sm.checkStates<s1>());
 }
 
-TEST_F(Common_StateMachine, test_external_transition)
+TEST_F(DsmFixture, test_external_transition)
 {
     _sm.addState<NiceMock<s0>, Entry>();
     _sm.addState<NiceMock<s1>>();
@@ -412,7 +420,28 @@ TEST_F(Common_StateMachine, test_external_transition)
     ASSERT_TRUE((_sm.checkStates<s1>()));
 }
 
-TEST_F(Common_StateMachine, test_external_transition_action)
+TEST_F(DsmFixture, test_external_complex_transition)
+{
+    _sm.addState<sm, s0, Entry>();
+    _sm.addState<s0, s1, Entry>();
+    _sm.addState<s0, s2>();
+    _sm.addState<s2, s3, Entry>();
+    _sm.addState<sm, s4>();
+    _sm.addState<s4, s5>();
+    _sm.addState<s4, s6>();
+    _sm.addState<s5, s7>();
+    _sm.addState<s5, s8>();
+    _sm.addTransition<s3, e0, s8>();
+
+    _sm.start();
+    ASSERT_TRUE((_sm.checkStates<s0, s1>()));
+    _sm.transit<s2>();
+    ASSERT_TRUE((_sm.checkStates<s0, s2, s3>()));
+    _sm.processEvent(e0{});
+    ASSERT_TRUE((_sm.checkStates<s4, s5, s8>()));
+}
+
+TEST_F(DsmFixture, test_external_transition_action)
 {
     _sm.addState<NiceMock<s0>, Entry>();
     _sm.addState<NiceMock<s1>>();
@@ -428,7 +457,7 @@ TEST_F(Common_StateMachine, test_external_transition_action)
     ASSERT_TRUE((_sm.checkStates<s1>()));
 }
 
-TEST_F(Common_StateMachine, test_external_transition_guard_true)
+TEST_F(DsmFixture, test_external_transition_guard_true)
 {
     _sm.addState<NiceMock<s0>, Entry>();
     _sm.addState<NiceMock<s1>>();
@@ -445,7 +474,7 @@ TEST_F(Common_StateMachine, test_external_transition_guard_true)
     ASSERT_TRUE((_sm.checkStates<s1>()));
 }
 
-TEST_F(Common_StateMachine, test_external_transition_guard_false)
+TEST_F(DsmFixture, test_external_transition_guard_false)
 {
     _sm.addState<NiceMock<s0>, Entry>();
     _sm.addState<NiceMock<s1>>();
@@ -462,7 +491,7 @@ TEST_F(Common_StateMachine, test_external_transition_guard_false)
     ASSERT_TRUE((_sm.checkStates<s0>()));
 }
 
-TEST_F(Common_StateMachine, test_external_transition_action_guard_true)
+TEST_F(DsmFixture, test_external_transition_action_guard_true)
 {
     _sm.addState<NiceMock<s0>, Entry>();
     _sm.addState<NiceMock<s1>>();
@@ -479,7 +508,7 @@ TEST_F(Common_StateMachine, test_external_transition_action_guard_true)
     ASSERT_TRUE((_sm.checkStates<s1>()));
 }
 
-TEST_F(Common_StateMachine, test_external_transition_action_guard_false)
+TEST_F(DsmFixture, test_external_transition_action_guard_false)
 {
     _sm.addState<NiceMock<s0>, Entry>();
     _sm.addState<NiceMock<s1>>();
@@ -496,7 +525,7 @@ TEST_F(Common_StateMachine, test_external_transition_action_guard_false)
     ASSERT_TRUE((_sm.checkStates<s0>()));
 }
 
-TEST_F(Common_StateMachine, test_internal_transition_action)
+TEST_F(DsmFixture, test_internal_transition_action)
 {
     _sm.addState<NiceMock<s0>, Entry>();
     _sm.addState<NiceMock<s1>>();
@@ -512,7 +541,7 @@ TEST_F(Common_StateMachine, test_internal_transition_action)
     ASSERT_TRUE((_sm.checkStates<s0>()));
 }
 
-TEST_F(Common_StateMachine, test_internal_transition_action_guard_true)
+TEST_F(DsmFixture, test_internal_transition_action_guard_true)
 {
     _sm.addState<NiceMock<s0>, Entry>();
     _sm.addState<NiceMock<s1>>();
@@ -529,7 +558,7 @@ TEST_F(Common_StateMachine, test_internal_transition_action_guard_true)
     ASSERT_TRUE((_sm.checkStates<s0>()));
 }
 
-TEST_F(Common_StateMachine, test_internal_transition_action_guard_false)
+TEST_F(DsmFixture, test_internal_transition_action_guard_false)
 {
     _sm.addState<NiceMock<s0>, Entry>();
     _sm.addState<NiceMock<s1>>();
@@ -546,7 +575,7 @@ TEST_F(Common_StateMachine, test_internal_transition_action_guard_false)
     ASSERT_TRUE((_sm.checkStates<s0>()));
 }
 
-TEST_F(Common_StateMachine, test_action_with_transit)
+TEST_F(DsmFixture, test_action_with_transit)
 {
     _sm.addState<NiceMock<s0>, Entry>();
     _sm.addState<NiceMock<s1>>();
@@ -561,7 +590,7 @@ TEST_F(Common_StateMachine, test_action_with_transit)
     ASSERT_TRUE((_sm.checkStates<s1>()));
 }
 
-TEST_F(Common_StateMachine, test_transit_outside_process)
+TEST_F(DsmFixture, test_transit_outside_process)
 {
     _sm.addState<NiceMock<s0>, Entry>();
     _sm.addState<NiceMock<s1>>();
@@ -576,7 +605,7 @@ TEST_F(Common_StateMachine, test_transit_outside_process)
     ASSERT_TRUE((_sm.checkStates<s1>()));
 }
 
-TEST_F(Common_StateMachine, test_post_event_on_entry)
+TEST_F(DsmFixture, test_post_event_on_entry)
 {
     _sm.addState<NiceMock<s0>, Entry>();
     _sm.addState<NiceMock<s1>>();
@@ -596,7 +625,7 @@ TEST_F(Common_StateMachine, test_post_event_on_entry)
     ASSERT_TRUE((_sm.checkStates<s1>()));
 }
 
-TEST_F(Common_StateMachine, test_error_on_entry)
+TEST_F(DsmFixture, test_error_on_entry)
 {
     _sm.addState<NiceMock<s0>, Entry>();
 
@@ -609,7 +638,7 @@ TEST_F(Common_StateMachine, test_error_on_entry)
     ASSERT_TRUE((_sm.checkStates<s0>()));
 }
 
-TEST_F(Common_StateMachine, test_error_on_exit)
+TEST_F(DsmFixture, test_error_on_exit)
 {
     _sm.addState<NiceMock<s0>, Entry>();
     _sm.addState<NiceMock<s1>>();
@@ -625,7 +654,7 @@ TEST_F(Common_StateMachine, test_error_on_exit)
     ASSERT_TRUE((_sm.checkStates<s1>()));
 }
 
-TEST_F(Common_StateMachine, test_error_on_action)
+TEST_F(DsmFixture, test_error_on_action)
 {
     _sm.addState<NiceMock<s0>, Entry>();
     _sm.addState<NiceMock<s1>>();
@@ -641,7 +670,7 @@ TEST_F(Common_StateMachine, test_error_on_action)
     ASSERT_TRUE((_sm.checkStates<s0>()));
 }
 
-TEST_F(Common_StateMachine, test_default_error_handling)
+TEST_F(DsmFixture, test_default_error_handling)
 {
     _sm.addState<NiceMock<s6>, Entry>();
     _sm.addTransition<s6, e0, s6, &s6::onEvent0>();
@@ -661,7 +690,7 @@ TEST_F(Common_StateMachine, test_default_error_handling)
     _sm.processEvent(e2{});
 }
 
-TEST_F(Common_StateMachine, test_store)
+TEST_F(DsmFixture, test_store)
 {
     _sm.addState<NiceMock<s0>, Entry>();
     _sm.addState<NiceMock<s1>>();
@@ -680,7 +709,7 @@ TEST_F(Common_StateMachine, test_store)
     ASSERT_EQ("changed", _sm.store()->data);
 }
 
-TEST_F(Common_StateMachine, test_composite_states)
+TEST_F(DsmFixture, test_composite_states)
 {
     _sm.addState<NiceMock<s0>, Entry>();
     _sm.addState<s0, NiceMock<s1>, Entry>();
@@ -690,7 +719,7 @@ TEST_F(Common_StateMachine, test_composite_states)
     ASSERT_TRUE((_sm.checkStates<s0, s1>()));
 }
 
-TEST_F(Common_StateMachine, test_ortho_states)
+TEST_F(DsmFixture, test_ortho_states)
 {
     _sm.addState<NiceMock<s0>, Entry>();
     _sm.addState<s0, NiceMock<s1>, Entry>();
@@ -704,7 +733,7 @@ TEST_F(Common_StateMachine, test_ortho_states)
     ASSERT_TRUE((_sm.checkStates<s0, s3>()));
 }
 
-TEST_F(Common_StateMachine, test_triggering_event)
+TEST_F(DsmFixture, test_triggering_event)
 {
     e0 _e0;
     e1 _e1;
@@ -754,7 +783,7 @@ TEST_F(Common_StateMachine, test_triggering_event)
     _sm.stop();
 }
 
-TEST_F(Common_StateMachine, test_shallow_history)
+TEST_F(DsmFixture, test_shallow_history)
 {
     _sm.addState<NiceMock<s0>, Entry>();
     _sm.addState<NiceMock<s1>>();
@@ -780,7 +809,7 @@ TEST_F(Common_StateMachine, test_shallow_history)
     ASSERT_TRUE((_sm.checkStates<s1, s2>()));
 }
 
-TEST_F(Common_StateMachine, test_deep_history)
+TEST_F(DsmFixture, test_deep_history)
 {
     _sm.addState<NiceMock<s0>, Entry>();
     _sm.addState<NiceMock<s1>>();
@@ -806,7 +835,7 @@ TEST_F(Common_StateMachine, test_deep_history)
     ASSERT_TRUE((_sm.checkStates<s1, s3>()));
 }
 
-TEST_F(Common_StateMachine, test_post_event)
+TEST_F(DsmFixture, test_post_event)
 {
     _sm.addState<NiceMock<s0>, Entry>();
     _sm.addState<NiceMock<s1>>();
@@ -823,7 +852,7 @@ TEST_F(Common_StateMachine, test_post_event)
     ASSERT_TRUE((_sm.checkStates<s1>()));
 }
 
-TEST_F(Common_StateMachine, test_defer_event)
+TEST_F(DsmFixture, test_defer_event)
 {
     _sm.addState<NiceMock<s0>, Entry>();
     _sm.addState<NiceMock<s1>>();
@@ -844,7 +873,7 @@ TEST_F(Common_StateMachine, test_defer_event)
     ASSERT_TRUE((_sm.checkStates<s1>()));
 }
 
-TEST_F(Common_StateMachine, test_sm_visitor)
+TEST_F(DsmFixture, test_sm_visitor)
 {
     _sm.addState<NiceMock<s0>, Entry>("s0");
     _sm.addState<s0, NiceMock<s1>, Entry>("s1");
