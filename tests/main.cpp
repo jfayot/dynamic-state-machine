@@ -218,6 +218,15 @@ TEST_F(DsmFixture, test_add_existing_state_in_descendant)
     _sm.setup();
 }
 
+TEST_F(DsmFixture, test_add_second_entry_state)
+{
+    EXPECT_CALL(_sm, onError(_)).Times(1);
+    _sm.addState<s0, Entry>();
+
+    _sm.addState<s1, Entry>();
+    ASSERT_EQ(nullptr, (_sm.getState<s1>()));
+}
+
 TEST_F(DsmFixture, test_add_existing_transition)
 {
     EXPECT_CALL(_sm, onError(_)).Times(1);
