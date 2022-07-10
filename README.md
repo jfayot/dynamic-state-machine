@@ -2,21 +2,21 @@
 
 A Dynamic StateMachine where states and transitions are created runtime.
 
-[![GitHub version](https://badge.fury.io/gh/jfayot%2FDynamic-State-Machine.svg)](https://badge.fury.io/gh/jfayot%2FDynamic-State-Machine)
+[![GitHub version](https://badge.fury.io/gh/jfayot%2Fdynamic-state-machine.svg)](https://badge.fury.io/gh/jfayot%2Fdynamic-state-machine)
 [![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/jfayot/Dynamic-State-Machine/blob/main/LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/jfayot/dynamic-state-machine/blob/main/LICENSE)
 
-[![Windows Build Status](https://github.com/jfayot/Dynamic-State-Machine/actions/workflows/windows.yml/badge.svg)](https://github.com/jfayot/Dynamic-State-Machine/actions/workflows/windows.yml)
-[![Linux Build Status](https://github.com/jfayot/Dynamic-State-Machine/actions/workflows/linux.yml/badge.svg)](https://github.com/jfayot/Dynamic-State-Machine/actions/workflows/linux.yml)
-[![MacOS Build Status](https://github.com/jfayot/Dynamic-State-Machine/actions/workflows/macos.yml/badge.svg)](https://github.com/jfayot/Dynamic-State-Machine/actions/workflows/macos.yml)
+[![Windows Build Status](https://github.com/jfayot/dynamic-state-machine/actions/workflows/windows.yml/badge.svg)](https://github.com/jfayot/dynamic-state-machine/actions/workflows/windows.yml)
+[![Linux Build Status](https://github.com/jfayot/dynamic-state-machine/actions/workflows/linux.yml/badge.svg)](https://github.com/jfayot/dynamic-state-machine/actions/workflows/linux.yml)
+[![MacOS Build Status](https://github.com/jfayot/dynamic-state-machine/actions/workflows/macos.yml/badge.svg)](https://github.com/jfayot/dynamic-state-machine/actions/workflows/macos.yml)
 
-[![Tests Status](https://github.com/jfayot/Dynamic-State-Machine/actions/workflows/tests.yml/badge.svg)](https://github.com/jfayot/Dynamic-State-Machine/actions/workflows/tests.yml)
-[![codecov](https://codecov.io/gh/jfayot/Dynamic-State-Machine/branch/main/graph/badge.svg)](https://codecov.io/gh/jfayot/Dynamic-State-Machine)
-[![CodeQL](https://github.com/jfayot/Dynamic-state-machine/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/jfayot/Dynamic-state-machine/actions/workflows/codeql-analysis.yml)
+[![Tests Status](https://github.com/jfayot/dynamic-state-machine/actions/workflows/tests.yml/badge.svg)](https://github.com/jfayot/dynamic-state-machine/actions/workflows/tests.yml)
+[![codecov](https://codecov.io/gh/jfayot/dynamic-state-machine/branch/main/graph/badge.svg)](https://codecov.io/gh/jfayot/dynamic-state-machine)
+[![CodeQL](https://github.com/jfayot/dynamic-state-machine/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/jfayot/dynamic-state-machine/actions/workflows/codeql-analysis.yml)
 [![Coverity scan](https://scan.coverity.com/projects/25247/badge.svg)](https://scan.coverity.com/projects/dsm)
-[![Codacy Badge](https://app.codacy.com/project/badge/Grade/94a50b94b2f34494bd7c12426ad3fc88)](https://www.codacy.com/gh/jfayot/Dynamic-State-Machine/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=jfayot/Dynamic-State-Machine&amp;utm_campaign=Badge_Grade)
-[![Language grade: C/C++](https://img.shields.io/lgtm/grade/cpp/g/jfayot/Dynamic-State-Machine.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/jfayot/Dynamic-State-Machine/context:cpp)
-[![Total alerts](https://img.shields.io/lgtm/alerts/g/jfayot/Dynamic-State-Machine.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/jfayot/Dynamic-State-Machine/alerts/)
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/94a50b94b2f34494bd7c12426ad3fc88)](https://www.codacy.com/gh/jfayot/dynamic-state-machine/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=jfayot/dynamic-state-machine&amp;utm_campaign=Badge_Grade)
+[![Language grade: C/C++](https://img.shields.io/lgtm/grade/cpp/g/jfayot/dynamic-state-machine.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/jfayot/dynamic-state-machine/context:cpp)
+[![Total alerts](https://img.shields.io/lgtm/alerts/g/jfayot/dynamic-state-machine.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/jfayot/dynamic-state-machine/alerts/)
 
 ## Features
 
