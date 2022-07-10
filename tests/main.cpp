@@ -840,19 +840,22 @@ TEST_F(DsmFixture, test_history_error)
     _sm.addState<sm, s0>();
     _sm.addState<s0, s1>();
     _sm.addState<s1, s2>();
+    _sm.addState<s2, s3>();
 
-    _sm.setHistory<s1>(History::Deep);
+    _sm.setHistory<s1, 0>(History::Deep);
     ASSERT_EQ(History::Deep, (_sm.getHistory<s1, 0>()));
-    _sm.setHistory<s0>(History::Deep);
+    _sm.setHistory<s0, 0>(History::Deep);
     ASSERT_EQ(std::nullopt, (_sm.getHistory<s0, 0>()));
-    _sm.setHistory<s2>(History::Deep);
+    _sm.setHistory<s2, 0>(History::Deep);
     ASSERT_EQ(std::nullopt, (_sm.getHistory<s2, 0>()));
-    _sm.setHistory<s2>(History::Shallow);
+    _sm.setHistory<s2, 0>(History::Shallow);
     ASSERT_EQ(std::nullopt, (_sm.getHistory<s2, 0>()));
-    _sm.setHistory<s0>(History::Shallow);
+    _sm.setHistory<s0, 0>(History::Shallow);
     ASSERT_EQ(History::Shallow, (_sm.getHistory<s0, 0>()));
-    _sm.setHistory<s3>(History::Shallow);
+    _sm.setHistory<s3, 0>(History::Shallow);
     ASSERT_EQ(std::nullopt, (_sm.getHistory<s3, 0>()));
+    _sm.setHistory<s4, 0>(History::Shallow);
+    ASSERT_EQ(std::nullopt, (_sm.getHistory<s4, 0>()));
 }
 
 TEST_F(DsmFixture, test_post_event)
