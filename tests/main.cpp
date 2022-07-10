@@ -835,6 +835,26 @@ TEST_F(DsmFixture, test_deep_history)
     ASSERT_TRUE((_sm.checkStates<s1, s3>()));
 }
 
+TEST_F(DsmFixture, test_history_error)
+{
+    _sm.addState<sm, s0>();
+    _sm.addState<s0, s1>();
+    _sm.addState<s1, s2>();
+
+    _sm.setHistory<s1>(History::Deep);
+    ASSERT_EQ(History::Deep, (_sm.getHistory<s1, 0>()));
+    _sm.setHistory<s0>(History::Deep);
+    ASSERT_EQ(std::nullopt, (_sm.getHistory<s0, 0>()));
+    _sm.setHistory<s2>(History::Deep);
+    ASSERT_EQ(std::nullopt, (_sm.getHistory<s2, 0>()));
+    _sm.setHistory<s2>(History::Shallow);
+    ASSERT_EQ(std::nullopt, (_sm.getHistory<s2, 0>()));
+    _sm.setHistory<s0>(History::Shallow);
+    ASSERT_EQ(History::Shallow, (_sm.getHistory<s0, 0>()));
+    _sm.setHistory<s3>(History::Shallow);
+    ASSERT_EQ(std::nullopt, (_sm.getHistory<s3, 0>()));
+}
+
 TEST_F(DsmFixture, test_post_event)
 {
     _sm.addState<NiceMock<s0>, Entry>();

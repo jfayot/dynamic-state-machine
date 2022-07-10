@@ -2654,6 +2654,27 @@ namespace dsm
         }
 
         /**
+         * @brief     getHistory
+         * @details   Gets the history to the provided StateType and region
+         */
+        template <typename StateType, int RegionIndex>
+        THistory getHistory()
+        {
+            auto state = this->template getDescendantImpl<StateType>();
+            if (nullptr == state) return std::nullopt;
+
+            auto itRegion = state->m_regions.find(RegionIndex);
+            if (itRegion != state->m_regions.end())
+            {
+                return itRegion->second->m_history;
+            }
+            else
+            {
+                return std::nullopt;
+            }
+        }
+
+        /**
          * @brief       resetHistory
          * @details     Resets the history of the provided StateType
          */
