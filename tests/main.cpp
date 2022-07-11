@@ -102,7 +102,7 @@ struct Visitor : IStateVisitor
     std::string searchedState;
     std::vector<std::string> states;
     bool found = false;
- 
+
     Visitor() {}
     explicit Visitor(const std::string& state) : searchedState{ state } {}
 
@@ -220,10 +220,14 @@ TEST_F(DsmFixture, test_add_existing_state_in_descendant)
 
 TEST_F(DsmFixture, test_add_second_entry_state)
 {
-    EXPECT_CALL(_sm, onError(_)).Times(1);
-    _sm.addState<s0, Entry>();
+    EXPECT_CALL(_sm, onError(_)).Times(2);
+    _sm.addState<NiceMock<s0>, Entry>();
 
     _sm.addState<s1, Entry>();
+    ASSERT_EQ(nullptr, (_sm.getState<s1>()));
+
+    ON_CALL(_sm, getStates()).WillByDefault(Return(TStates{ _sm.createState<s1, Entry>() }));
+    _sm.setup();
     ASSERT_EQ(nullptr, (_sm.getState<s1>()));
 }
 
@@ -431,15 +435,15 @@ TEST_F(DsmFixture, test_external_transition)
 
 TEST_F(DsmFixture, test_external_complex_transition)
 {
-    _sm.addState<sm, s0, Entry>();
-    _sm.addState<s0, s1, Entry>();
-    _sm.addState<s0, s2>();
-    _sm.addState<s2, s3, Entry>();
-    _sm.addState<sm, s4>();
-    _sm.addState<s4, s5>();
-    _sm.addState<s4, s6>();
-    _sm.addState<s5, s7>();
-    _sm.addState<s5, s8>();
+    _sm.addState<sm, NiceMock<s0>, Entry>();
+    _sm.addState<s0, NiceMock<s1>, Entry>();
+    _sm.addState<s0, NiceMock<s2>>();
+    _sm.addState<s2, NiceMock<s3>, Entry>();
+    _sm.addState<sm, NiceMock<s4>>();
+    _sm.addState<s4, NiceMock<s5>>();
+    _sm.addState<s4, NiceMock<s6>>();
+    _sm.addState<s5, NiceMock<s7>>();
+    _sm.addState<s5, NiceMock<s8>>();
     _sm.addTransition<s3, e0, s8>();
 
     _sm.start();
