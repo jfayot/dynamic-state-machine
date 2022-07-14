@@ -331,7 +331,7 @@ namespace dsm
             std::type_index m_index;
 
         protected:
-            TransitionBase(const std::type_index& index)
+            explicit TransitionBase(const std::type_index& index)
                 : m_index{ index }
             {}
 
@@ -354,7 +354,7 @@ namespace dsm
              */
             TCallbackFunc m_cb;
 
-            Transition(const TCallbackFunc& cb)
+            explicit Transition(const TCallbackFunc& cb)
                 : TransitionBase{ Index<EventType>() }
                 , m_cb{ cb }
             {
@@ -388,7 +388,7 @@ namespace dsm
              */
             TCallbackFunc m_cb;
 
-            Transition(const TCallbackFunc& cb)
+            explicit Transition(const TCallbackFunc& cb)
                 : TransitionBase{ Index() }
                 , m_cb{ cb }
             {}
@@ -407,12 +407,12 @@ namespace dsm
 
         struct PostedTransition
         {
-            PostedTransition(dsm::EventBase* evt, bool deferred = false)
+            explicit PostedTransition(dsm::EventBase* evt, bool deferred = false)
                 : m_evt{ evt }
                 , m_deferred{ deferred }
             {}
 
-            PostedTransition(TransitionBase* transition, bool deferred = false)
+            explicit PostedTransition(TransitionBase* transition, bool deferred = false)
                 : m_transition{ transition }
                 , m_deferred{ deferred }
             {}
@@ -1027,7 +1027,7 @@ namespace dsm
          * @param[in]   index: sub-class type index
          * @details     StateBase ctor
          */
-        StateBase(const std::type_index& index)
+        explicit StateBase(const std::type_index& index)
             : m_index{ index }
         {}
 

@@ -924,6 +924,67 @@ TEST_F(DsmFixture, test_sm_visitor)
     ASSERT_TRUE((v.states == std::vector<std::string>{ "sm", "s0", "s1", "s2" }));
 }
 
+TEST_F(DsmFixture, test_posted_transition)
+{
+    auto _e0 = new e0{};
+    auto _cb = [](const e0&) -> bool { return true; };
+    auto _tr = new details::Transition<e0>{ _cb };
+    details::PostedTransition _ptr1{ _e0, true };
+    details::PostedTransition _ptr2{ _tr, true };
+
+    ASSERT_NE(nullptr, _ptr1.m_evt);
+    ASSERT_EQ(nullptr, _ptr1.m_transition);
+    ASSERT_TRUE(_ptr1.m_deferred);
+    ASSERT_EQ(nullptr, _ptr2.m_evt);
+    ASSERT_NE(nullptr, _ptr2.m_transition);
+    ASSERT_TRUE(_ptr2.m_deferred);
+
+    details::PostedTransition _ptr3{ std::move(_ptr1) };
+    details::PostedTransition _ptr4 = std::move(_ptr2);
+
+    ASSERT_EQ(nullptr, _ptr1.m_evt);
+    ASSERT_EQ(nullptr, _ptr1.m_transition);
+    ASSERT_FALSE(_ptr1.m_deferred);
+    ASSERT_EQ(nullptr, _ptr2.m_evt);
+    ASSERT_EQ(nullptr, _ptr2.m_transition);
+    ASSERT_FALSE(_ptr2.m_deferred);
+
+    ASSERT_NE(nullptr, _ptr3.m_evt);
+    ASSERT_EQ(nullptr, _ptr3.m_transition);
+    ASSERT_TRUE(_ptr3.m_deferred);
+    ASSERT_EQ(nullptr, _ptr4.m_evt);
+    ASSERT_NE(nullptr, _ptr4.m_transition);
+    ASSERT_TRUE(_ptr3.m_deferred);
+}
+
+TEST_F(DsmFixture, test_add_transition_from_unknown_src_state)
+{
+    EXPECT_CALL(_sm, onError(_)).Times(1);
+    _sm.addTransition<s0, e0, s1>();
+}
+
+TEST_F(DsmFixture, test_add_transition_to_unkown_dst_state)
+{
+    EXPECT_CALL(_sm, onError(_)).Times(1);
+    _sm.addState<NiceMock<s0>>();
+    _sm.addTransition<s0, e0, s1>();
+}
+
+TEST_F(DsmFixture, test_add_transition_action_on_unkown_state)
+{
+    EXPECT_CALL(_sm, onError(_)).Times(1);
+    _sm.addState<NiceMock<s0>>();
+    _sm.addTransition<s0, e1, s1, &s1::onEvent1>();
+}
+
+TEST_F(DsmFixture, test_add_transition_action_on_non_ancestor_state)
+{
+    EXPECT_CALL(_sm, onError(_)).Times(1);
+    _sm.addState<NiceMock<s0>>();
+    _sm.addState<NiceMock<s1>>();
+    _sm.addTransition<s0, e1, s1, &s1::onEvent1>();
+}
+
 int main(int argc, char** argv)
 {
     ::testing::InitGoogleTest(&argc, argv);
