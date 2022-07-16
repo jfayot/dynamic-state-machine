@@ -188,7 +188,7 @@ TEST_F(DsmFixture, test_add_existing_state)
 
     _sm.addState<NiceMock<s0>>();
 
-    ON_CALL(_sm, getStates()).WillByDefault(Return(TStates{ _sm.createState<NiceMock<s0>>() }));
+    ON_CALL(_sm, getStates).WillByDefault(Invoke([&](){ return TStates{ _sm.createState<NiceMock<s0>>() }; }));
     _sm.setup();
 }
 
@@ -202,7 +202,7 @@ TEST_F(DsmFixture, test_add_existing_state_in_ancestor)
 
     s1* _s1 = _sm.getState<s1>();
     EXPECT_CALL(*_s1, onError(_)).Times(1);
-    ON_CALL(*_s1, getStates()).WillByDefault(Return(TStates{ _s1->createState<NiceMock<s0>>() }));
+    ON_CALL(*_s1, getStates()).WillByDefault(Invoke([&](){ return TStates{ _s1->createState<NiceMock<s0>>() }; }));
     _sm.setup();
 }
 
@@ -214,7 +214,7 @@ TEST_F(DsmFixture, test_add_existing_state_in_descendant)
 
     _sm.addState<NiceMock<s1>>();
 
-    ON_CALL(_sm, getStates()).WillByDefault(Return(TStates{ _sm.createState<NiceMock<s1>>() }));
+    ON_CALL(_sm, getStates()).WillByDefault(Invoke([&](){ return TStates{ _sm.createState<NiceMock<s1>>() }; }));
     _sm.setup();
 }
 
@@ -226,7 +226,7 @@ TEST_F(DsmFixture, test_add_second_entry_state)
     _sm.addState<s1, Entry>();
     ASSERT_EQ(nullptr, (_sm.getState<s1>()));
 
-    ON_CALL(_sm, getStates()).WillByDefault(Return(TStates{ _sm.createState<s1, Entry>() }));
+    ON_CALL(_sm, getStates()).WillByDefault(Invoke([&](){ return TStates{ _sm.createState<s1, Entry>() }; }));
     _sm.setup();
     ASSERT_EQ(nullptr, (_sm.getState<s1>()));
 }
@@ -242,7 +242,7 @@ TEST_F(DsmFixture, test_add_existing_transition)
 
     s0* _s0 = _sm.getState<s0>();
     EXPECT_CALL(*_s0, onError(_)).Times(1);
-    ON_CALL(*_s0, getTransitions()).WillByDefault(Return(TTransitions{ _s0->createTransition<e0, s1>() }));
+    ON_CALL(*_s0, getTransitions()).WillByDefault(Invoke([&](){ return TTransitions{ _s0->createTransition<e0, s1>() }; }));
     _sm.setup();
 }
 
@@ -259,7 +259,7 @@ TEST_F(DsmFixture, test_add_existing_transition_in_sibling)
 
     s2* _s2 = _sm.getState<s2>();
     EXPECT_CALL(*_s2, onError(_)).Times(0);
-    ON_CALL(*_s2, getTransitions()).WillByDefault(Return(TTransitions{ _s2->createTransition<e2, s3>() }));
+    ON_CALL(*_s2, getTransitions()).WillByDefault(Invoke([&](){ return TTransitions{ _s2->createTransition<e2, s3>() }; }));
     _sm.setup();
 }
 
@@ -276,7 +276,7 @@ TEST_F(DsmFixture, test_add_existing_transition_in_ancestor)
 
     s3* _s3 = _sm.getState<s3>();
     EXPECT_CALL(*_s3, onError(_)).Times(0);
-    ON_CALL(*_s3, getTransitions()).WillByDefault(Return(TTransitions{ _s3->createTransition<e0, s2>() }));
+    ON_CALL(*_s3, getTransitions()).WillByDefault(Invoke([&](){ return TTransitions{ _s3->createTransition<e0, s2>() }; }));
     _sm.setup();
 }
 
@@ -293,7 +293,7 @@ TEST_F(DsmFixture, test_add_existing_transition_in_descendant)
 
     s1* _s1 = _sm.getState<s1>();
     EXPECT_CALL(*_s1, onError(_)).Times(0);
-    ON_CALL(*_s1, getTransitions()).WillByDefault(Return(TTransitions{ _s1->createTransition<e0, s0>() }));
+    ON_CALL(*_s1, getTransitions()).WillByDefault(Invoke([&](){ return TTransitions{ _s1->createTransition<e0, s0>() }; }));
     _sm.setup();
 }
 
@@ -312,7 +312,7 @@ TEST_F(DsmFixture, test_add_existing_transition_in_orthogonal_region)
 
     s4* _s4 = _sm.getState<s4>();
     EXPECT_CALL(*_s4, onError(_)).Times(0);
-    ON_CALL(*_s4, getTransitions()).WillByDefault(Return(TTransitions{ _s4->createTransition<e0, s5>() }));
+    ON_CALL(*_s4, getTransitions()).WillByDefault(Invoke([&](){ return TTransitions{ _s4->createTransition<e0, s5>() }; }));
     _sm.setup();
 }
 
@@ -326,7 +326,7 @@ TEST_F(DsmFixture, test_add_transition_crossing_region)
 
     s0* _s0 = _sm.getState<s0>();
     EXPECT_CALL(*_s0, onError(_)).Times(1);
-    ON_CALL(*_s0, getTransitions()).WillByDefault(Return(TTransitions{ _s0->createTransition<e0, s1>() }));
+    ON_CALL(*_s0, getTransitions()).WillByDefault(Invoke([&](){ return TTransitions{ _s0->createTransition<e0, s1>() }; }));
     _sm.setup();
 }
 
@@ -340,7 +340,7 @@ TEST_F(DsmFixture, test_add_transition_to_parent)
 
     s1* _s1 = _sm.getState<s1>();
     EXPECT_CALL(*_s1, onError(_)).Times(1);
-    ON_CALL(*_s1, getTransitions()).WillByDefault(Return(TTransitions{ _s1->createTransition<e0, s0>() }));
+    ON_CALL(*_s1, getTransitions()).WillByDefault(Invoke([&](){ return TTransitions{ _s1->createTransition<e0, s0>() }; }));
     _sm.setup();
 }
 
@@ -354,7 +354,7 @@ TEST_F(DsmFixture, test_add_transition_to_child)
 
     s0* _s0 = _sm.getState<s0>();
     EXPECT_CALL(*_s0, onError(_)).Times(1);
-    ON_CALL(*_s0, getTransitions()).WillByDefault(Return(TTransitions{ _s0->createTransition<e0, s1>() }));
+    ON_CALL(*_s0, getTransitions()).WillByDefault(Invoke([&](){ return TTransitions{ _s0->createTransition<e0, s1>() }; }));
     _sm.setup();
 }
 
@@ -893,8 +893,9 @@ TEST_F(DsmFixture, test_defer_event)
     _sm.addState<NiceMock<s0>, Entry>();
     _sm.addState<NiceMock<s1>>();
 
-    _sm.addTransition<s0, e0, s1>();
+    _sm.addTransition<s0, e0, s0, &s0::onEvent0>();
     _sm.addTransition<s1, e1, s1, &s1::onEvent1>();
+    _sm.addTransition<s0, e2, s1>();
 
     bool onEvent1Called = false;
     s1* _s1 = _sm.getState<s1>();
@@ -904,6 +905,8 @@ TEST_F(DsmFixture, test_defer_event)
     _sm.deferEvent(e1{});
     ASSERT_FALSE(onEvent1Called);
     _sm.processEvent(e0{});
+    ASSERT_FALSE(onEvent1Called);
+    _sm.processEvent(e2{});
     ASSERT_TRUE(onEvent1Called);
 
     ASSERT_TRUE((_sm.checkStates<s1>()));
@@ -940,7 +943,8 @@ TEST_F(DsmFixture, test_posted_transition)
     ASSERT_TRUE(_ptr2.m_deferred);
 
     details::PostedTransition _ptr3{ std::move(_ptr1) };
-    details::PostedTransition _ptr4 = std::move(_ptr2);
+    details::PostedTransition _ptr4;
+    _ptr4 = std::move(_ptr2);
 
     ASSERT_EQ(nullptr, _ptr1.m_evt);
     ASSERT_EQ(nullptr, _ptr1.m_transition);

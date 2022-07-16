@@ -407,6 +407,8 @@ namespace dsm
 
         struct PostedTransition
         {
+            PostedTransition() = default;
+
             explicit PostedTransition(dsm::EventBase* evt, bool deferred = false)
                 : m_evt{ evt }
                 , m_deferred{ deferred }
