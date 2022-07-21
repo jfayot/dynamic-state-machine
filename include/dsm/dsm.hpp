@@ -1784,6 +1784,18 @@ namespace dsm
             return sstr.str();
         }
 
+        void preProcess() const
+        {
+            if (nullptr == m_topSm) return;
+            topSm()->m_processing = true;
+        }
+
+        void postProcess() const
+        {
+            if (nullptr == m_topSm) return;
+            topSm()->m_processing = false;
+        }
+
     public:
         /**
          * @brief   trigEvent
@@ -2098,18 +2110,6 @@ namespace dsm
             }
 
             return nullptr;
-        }
-
-        void preProcess() const
-        {
-            if (nullptr == m_topSm) return;
-            topSm()->m_processing = true;
-        }
-
-        void postProcess() const
-        {
-            if (nullptr == m_topSm) return;
-            topSm()->m_processing = false;
         }
 
         /**
@@ -2847,6 +2847,7 @@ namespace dsm
         {
             static_assert(details::is_event_v<EventType>, "EventType must inherit from Event");
 
+            if (nullptr == this->m_topSm) return;
             if (!this->started()) return;
 
             this->preProcess();
