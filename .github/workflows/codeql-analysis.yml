@@ -19,7 +19,7 @@ on:
     branches: [ main ]
   schedule:
     - cron: '37 11 * * 3'
-  workflow_run:
+  workflow_dispatch:
 
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
