@@ -112,3 +112,35 @@ int main()
     std::cout << sm << std::endl;
 }
 ```
+
+## Specify entry/exit actions
+
+![entry_exit_actions](http://www.plantuml.com/plantuml/proxy?cache=no&src=https://raw.githubusercontent.com/jfayot/dynamic-state-machine/master/resources/entry_exit_action.puml)
+
+```c++
+struct e1 : Event<e1>{};
+
+struct sm : StateMachine<sm>{};
+struct s0 : State<s0, sm>
+{
+    void onExit() override { std::cout << "Leaving state " << this->name() << std::endl; }
+};
+struct s1 : State<s1, sm>
+{
+    void onEntry() override { std::cout << "Leaving state " << this->name() << std::endl; }
+};
+
+int main()
+{
+    sm sm;
+
+    sm.addState<s0, Entry>();
+    sm.addState<s1>();
+    sm.addTransition<s0, e1, s1>();
+
+    sm.start();
+    sm.processEvent(e1{});
+
+    return 0;
+}
+```
