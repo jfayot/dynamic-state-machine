@@ -115,7 +115,7 @@ int main()
 
 ## Specify entry/exit actions
 
-![entry_exit_actions](http://www.plantuml.com/plantuml/proxy?cache=no&src=https://raw.githubusercontent.com/jfayot/dynamic-state-machine/master/resources/entry_exit_action.puml)
+![entry_exit_actions](http://www.plantuml.com/plantuml/proxy?cache=no&src=https://raw.githubusercontent.com/jfayot/dynamic-state-machine/master/resources/entry_exit_actions.puml)
 
 ```c++
 struct e1 : Event<e1>{};
