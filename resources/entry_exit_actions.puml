@@ -1,7 +1,7 @@
 @startuml
 hide empty description
 [*] -right-> s0
-s0 -right-> s1
+s0 -right-> s1 : e1
 s0: onExit()
 s1: onEntry()
 @enduml

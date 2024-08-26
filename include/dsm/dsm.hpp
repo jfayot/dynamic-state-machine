@@ -524,6 +524,8 @@ namespace dsm
     public:
         using Derived = DerivedType;
 
+        const std::string& name() const { return m_name; }
+
     protected:
         Event() :
             EventBase{ details::Index<DerivedType>() }

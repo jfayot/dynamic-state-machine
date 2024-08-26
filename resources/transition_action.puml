@@ -2,4 +2,5 @@
 hide empty description
 [*] -right-> s0
 s0 -right-> s1 : e1
+s0: onEvent1()
 @enduml
