@@ -43,11 +43,7 @@ A Dynamic StateMachine where states and transitions are created runtime.
 
 Considering the following minimal state machine, it can be coded as follows:
 
-```plantuml
-hide empty description
-[*] -right-> s0
-s0 -right-> s1
-```
+![basic-uml](http://www.plantuml.com/plantuml/proxy?cache=no&src=https://raw.githubusercontent.com/jfayot/dynamic-state-machine/master/resources/basic.puml)
 
 ### Flat-style StateMachine setup
 

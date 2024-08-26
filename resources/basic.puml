@@ -1,0 +1,5 @@
+@startuml
+hide empty description
+[*] -right-> s0
+s0 -right-> s1
+@enduml
