@@ -15,36 +15,39 @@ A Dynamic StateMachine where states and transitions are created runtime.
 [![CodeQL](https://github.com/jfayot/dynamic-state-machine/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/jfayot/dynamic-state-machine/actions/workflows/codeql-analysis.yml)
 [![Coverity scan](https://scan.coverity.com/projects/25247/badge.svg)](https://scan.coverity.com/projects/dsm)
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/94a50b94b2f34494bd7c12426ad3fc88)](https://www.codacy.com/gh/jfayot/dynamic-state-machine/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=jfayot/dynamic-state-machine&amp;utm_campaign=Badge_Grade)
-[![Language grade: C/C++](https://img.shields.io/lgtm/grade/cpp/g/jfayot/dynamic-state-machine.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/jfayot/dynamic-state-machine/context:cpp)
-[![Total alerts](https://img.shields.io/lgtm/alerts/g/jfayot/dynamic-state-machine.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/jfayot/dynamic-state-machine/alerts/)
 
 ## Features
 
-*   Flat-style and enclosed-style setup
-*   Unlimited number of states and transitions
-*   Hierarchical states
-*   Entry and exit actions
-*   Internal and external transitions
-*   Transition actions
-*   Transition guard conditions
-*   State history (deep and shallow)
-*   Event processing
-*   Event deferring
-*   Event posting
-*   Orthogonal regions
-*   Optional shared storage
-*   Visitable
-*   Observable (check current active states)
-*   Exception handling
-*   Platform independent, C++17
-*   Header only
-*   No external dependencies except STL
-*   Moderate use of templates
+* Flat-style and enclosed-style setup
+* Unlimited number of states and transitions
+* Hierarchical states
+* Entry and exit actions
+* Internal and external transitions
+* Transition actions
+* Transition guard conditions
+* State history (deep and shallow)
+* Event processing
+* Event deferring
+* Event posting
+* Orthogonal regions
+* Optional shared storage
+* Visitable
+* Observable (check current active states)
+* Exception handling
+* Platform independent, C++17
+* Header only
+* No external dependencies except STL
+* Moderate use of templates
 
 ## Minimal examples
 
 Considering the following minimal state machine, it can be coded as follows:
-![minimal](https://raw.githubusercontent.com/jfayot/dynamic-state-machine/main/.github/images/minimal.png)
+
+```plantuml
+hide empty description
+[*] -right-> s0
+s0 -right-> s1
+```
 
 ### Flat-style StateMachine setup
 
@@ -76,6 +79,7 @@ int main()
     std::cout << sm << std::endl;
 }
 ```
+
 ### Enclosed-style StateMachine setup
 
 ```c++
