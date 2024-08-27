@@ -1,6 +1,6 @@
 @startuml
 hide empty description
 [*] -right-> s0
-s0 -> s0 : e1/onEvent1
+s0 -right-> s1 : e1[guard]/onEvent1
 s0: onEvent1()
 @enduml

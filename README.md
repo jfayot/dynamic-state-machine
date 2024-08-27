@@ -104,6 +104,8 @@ Considering the following minimal state machine, it can be coded as follows:
 
 ### Flat-style StateMachine setup
 
+[minimal_flat.cpp](./examples/minimal_flat.cpp)
+
 ```c++
 #include "dsm/dsm.hpp"
 #include <cassert>
@@ -134,6 +136,8 @@ int main()
 ```
 
 ### Enclosed-style StateMachine setup
+
+[minimal_enclosed.cpp](./examples/minimal_enclosed.cpp)
 
 ```c++
 #include "dsm/dsm.hpp"
@@ -174,16 +178,22 @@ int main()
 
 ![entry_exit_actions](http://www.plantuml.com/plantuml/proxy?cache=no&src=https://raw.githubusercontent.com/jfayot/dynamic-state-machine/master/resources/entry_exit_actions.puml)
 
-[entry_exit_actions.cpp](./examples/entry_exit_actions/entry_exit_actions.cpp)
+[entry_exit_actions.cpp](./examples/entry_exit_actions.cpp)
 
 ## Transition action
 
 ![transition_action](http://www.plantuml.com/plantuml/proxy?cache=no&src=https://raw.githubusercontent.com/jfayot/dynamic-state-machine/master/resources/transition_action.puml)
 
-[transition_action.cpp](./examples/transition_action/transition_action.cpp)
+[transition_action.cpp](./examples/transition_action.cpp)
+
+## Transition guard
+
+![transition_guard](http://www.plantuml.com/plantuml/proxy?cache=no&src=https://raw.githubusercontent.com/jfayot/dynamic-state-machine/master/resources/transition_guard.puml)
+
+[transition_guard.cpp](./examples/transition_guard.cpp)
 
 ## Self transition
 
 ![self_transition](http://www.plantuml.com/plantuml/proxy?cache=no&src=https://raw.githubusercontent.com/jfayot/dynamic-state-machine/master/resources/self_transition.puml)
 
-[self_transition.cpp](./examples/self_transition/self_transition.cpp)
+[self_transition.cpp](./examples/self_transition.cpp)
