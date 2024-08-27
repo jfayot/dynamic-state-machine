@@ -5,7 +5,7 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "_CMakePredefinedTargets")
 
 # lib's version
-set(version 0.0.1)
+set(version 0.1.1)
 
 project(DynamicStateMachine
   VERSION ${version}
@@ -14,6 +14,17 @@ project(DynamicStateMachine
 # make cache variables for install destinations
 include(GNUInstallDirs)
 
+# download CPM.cmake
+file(
+  DOWNLOAD
+  https://github.com/cpm-cmake/CPM.cmake/releases/download/v0.40.2/CPM.cmake
+  ${CMAKE_CURRENT_BINARY_DIR}/cmake/CPM.cmake
+  EXPECTED_HASH SHA256=c8cdc32c03816538ce22781ed72964dc864b2a34a310d3b7104812a5ca2d835d
+)
+
+include(${CMAKE_CURRENT_BINARY_DIR}/cmake/CPM.cmake)
+CPMUsePackageLock(package-lock.cmake)
+
 # check if project is standalone or embedded
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     set(IS_ROOT_PROJECT ON)
@@ -21,9 +32,10 @@ else()
     set(IS_ROOT_PROJECT OFF)
 endif()
 
-option(BUILD_EXAMPLES "Build examples" ${IS_ROOT_PROJECT})
-option(BUILD_TESTS "Build tests" ${IS_ROOT_PROJECT})
-option(ENABLE_COVERAGE "Enable coverage" ${IS_ROOT_PROJECT})
+option(BUILD_DSM_EXAMPLES "Build examples" ${IS_ROOT_PROJECT})
+option(BUILD_DSM_TESTS "Build tests" ${IS_ROOT_PROJECT})
+option(ENABLE_DSM_INSTALL "Enable package installation" ${IS_ROOT_PROJECT})
+option(ENABLE_DSM_COVERAGE "Enable coverage" ${IS_ROOT_PROJECT})
 
 add_library(dsm
   INTERFACE
@@ -58,47 +70,26 @@ add_custom_target(DynamicStateMachine
     ${CMAKE_CURRENT_LIST_DIR}/.github/workflows/tests.yml
 )
 
-if (BUILD_EXAMPLES)
+if (BUILD_DSM_EXAMPLES)
   add_subdirectory(examples)
 endif()
 
-if (BUILD_TESTS)
-  enable_testing()
+if (BUILD_DSM_TESTS)
   add_subdirectory(tests)
 endif()
 
-if(ENABLE_INSTALL)
-  install(TARGETS dsm
-     EXPORT dsmTargets
-     INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-  )
+if(ENABLE_DSM_INSTALL)
+  CPMGetPackage(CPMPackageProject)
 
-  install(FILES include/dsm/dsm.hpp DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dsm)
-
-  install(EXPORT dsmTargets
-     FILE dsmTargets.cmake
-     NAMESPACE dsm::
-     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/dsm
-  )
-
-  include(CMakePackageConfigHelpers)
-
-  # generate package's config file
-  configure_package_config_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Config.cmake.in
-    ${CMAKE_CURRENT_BINARY_DIR}/dsmConfig.cmake
-    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/dsm
-  )
-
-  # generate the version file for the config file
-  write_basic_package_version_file(
-    ${CMAKE_CURRENT_BINARY_DIR}/dsmConfigVersion.cmake
-    VERSION ${version}
-    COMPATIBILITY AnyNewerVersion
-  )
-
-  install(FILES
-    ${CMAKE_CURRENT_BINARY_DIR}/dsmConfig.cmake
-    ${CMAKE_CURRENT_BINARY_DIR}/dsmConfigVersion.cmake
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/dsm
+  packageProject(
+    NAME dsm
+    VERSION ${PROJECT_VERSION}
+    NAMESPACE dsm
+    BINARY_DIR ${PROJECT_BINARY_DIR}
+    INCLUDE_DIR ${PROJECT_SOURCE_DIR}/include
+    INCLUDE_DESTINATION include
+    VERSION_HEADER dsm/version.h
+    DISABLE_VERSION_SUFFIX YES
+    COMPATIBILITY SameMajorVersion
   )
 endif()

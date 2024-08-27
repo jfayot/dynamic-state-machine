@@ -1,0 +1,6 @@
+@startuml
+hide empty description
+[*] -right-> s0
+s0 -> s0 : e1
+s0: onEvent1()
+@enduml

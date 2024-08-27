@@ -1,24 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-find_package(GTest)
-
-# configure build of googletest
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-
-if (NOT GTest_FOUND)
-  include(FetchContent)
-  FetchContent_Declare(googletest
-    QUIET
-    URL https://github.com/google/googletest/archive/refs/tags/release-1.12.1.tar.gz
-  )
-
-  FetchContent_MakeAvailable(googletest)
-
-  set_target_properties(gtest gmock gtest_main gmock_main
-    PROPERTIES
-      FOLDER googletest
-  )
-endif()
+CPMGetPackage(googletest)
 
 add_executable(tests
   main.cpp
@@ -31,7 +13,7 @@ target_link_libraries(tests
     gmock
 )
 
-if (ENABLE_COVERAGE)
+if (ENABLE_DSM_COVERAGE)
   if(CMAKE_CXX_COMPILER_ID MATCHES GNU AND CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
     target_compile_options(tests
       PRIVATE
@@ -45,6 +27,5 @@ if (ENABLE_COVERAGE)
 endif()
 
 include(GoogleTest)
-gtest_discover_tests(tests
-  DISCOVERY_TIMEOUT 240
-)
+enable_testing()
+gtest_discover_tests(tests)

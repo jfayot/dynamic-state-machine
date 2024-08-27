@@ -2,13 +2,19 @@
 
 A Dynamic StateMachine where states and transitions are created runtime.
 
+## Project status
+
 ![GitHub Release](https://img.shields.io/github/v/release/jfayot/dynamic-state-machine)
 [![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/jfayot/dynamic-state-machine/blob/main/LICENSE)
 
+## Build status
+
 [![Windows Build Status](https://github.com/jfayot/dynamic-state-machine/actions/workflows/windows.yml/badge.svg)](https://github.com/jfayot/dynamic-state-machine/actions/workflows/windows.yml)
 [![Linux Build Status](https://github.com/jfayot/dynamic-state-machine/actions/workflows/linux.yml/badge.svg)](https://github.com/jfayot/dynamic-state-machine/actions/workflows/linux.yml)
 [![MacOS Build Status](https://github.com/jfayot/dynamic-state-machine/actions/workflows/macos.yml/badge.svg)](https://github.com/jfayot/dynamic-state-machine/actions/workflows/macos.yml)
+
+## Quality
 
 [![Tests Status](https://github.com/jfayot/dynamic-state-machine/actions/workflows/tests.yml/badge.svg)](https://github.com/jfayot/dynamic-state-machine/actions/workflows/tests.yml)
 [![codecov](https://codecov.io/gh/jfayot/dynamic-state-machine/branch/main/graph/badge.svg)](https://codecov.io/gh/jfayot/dynamic-state-machine)
@@ -38,6 +44,57 @@ A Dynamic StateMachine where states and transitions are created runtime.
 * Header only
 * No external dependencies except STL
 * Moderate use of templates
+
+## Build and install
+
+```bash
+cmake -B build -DCMAKE_INSTALL_PREFIX=/path/to/install/directory
+cmake --build build --target install
+```
+
+## Usage
+
+Either build and install dsm package and then use cmake's findPackage to include it in your project:
+
+```cmake
+cmake_minimum_required(VERSION 3.16)
+
+project(your_project
+  LANGUAGES CXX
+)
+
+add_executable(your_target ${CMAKE_CURRENT_LIST_DIR}/main.cpp)
+
+findPackage(dsm VERSION 0.1.1 REQUIRED)
+
+target_link_libraries(your_target PRIVATE dsm::dsm)
+```
+
+Or include it directly in you project using CPM:
+
+```cmake
+cmake_minimum_required(VERSION 3.16)
+
+project(your_project
+  LANGUAGES CXX
+)
+
+# download CPM.cmake
+file(
+  DOWNLOAD
+  https://github.com/cpm-cmake/CPM.cmake/releases/download/v0.40.2/CPM.cmake
+  ${CMAKE_CURRENT_BINARY_DIR}/cmake/CPM.cmake
+  EXPECTED_HASH SHA256=c8cdc32c03816538ce22781ed72964dc864b2a34a310d3b7104812a5ca2d835d
+)
+
+include(${CMAKE_CURRENT_BINARY_DIR}/cmake/CPM.cmake)
+
+CPMAddPackage("gh:jfayot/dynamic-state-machine@0.1.1")
+
+add_executable(your_target ${CMAKE_CURRENT_LIST_DIR}/main.cpp)
+
+target_link_libraries(your_target PRIVATE dsm::dsm)
+```
 
 ## Minimal examples
 
@@ -117,58 +174,16 @@ int main()
 
 ![entry_exit_actions](http://www.plantuml.com/plantuml/proxy?cache=no&src=https://raw.githubusercontent.com/jfayot/dynamic-state-machine/master/resources/entry_exit_actions.puml)
 
-```c++
-struct e1 : Event<e1>{};
-
-struct sm : StateMachine<sm>{};
-struct s0 : State<s0, sm>
-{
-    void onExit() override { std::cout << "Leaving state " << this->name() << std::endl; }
-};
-struct s1 : State<s1, sm>
-{
-    void onEntry() override { std::cout << "Leaving state " << this->name() << std::endl; }
-};
-
-int main()
-{
-    sm sm;
-
-    sm.addState<s0, Entry>();
-    sm.addState<s1>();
-    sm.addTransition<s0, e1, s1>();
-
-    sm.start();
-    sm.processEvent(e1{});
-
-    return 0;
-}
-```
+[entry_exit_actions.cpp](./examples/entry_exit_actions/entry_exit_actions.cpp)
 
 ## Transition action
 
 ![transition_action](http://www.plantuml.com/plantuml/proxy?cache=no&src=https://raw.githubusercontent.com/jfayot/dynamic-state-machine/master/resources/transition_action.puml)
 
-```c++
-struct e1 : Event<e1>{};
+[transition_action.cpp](./examples/transition_action/transition_action.cpp)
 
-struct sm : StateMachine<sm>{};
-struct s0 : State<s0, sm>{
-    void onEvent1(const e1& evt) { std::cout << "Received event " << evt.name() << std::endl; }
-};
-struct s1 : State<s1, sm>{};
+## Self transition
 
-int main()
-{
-    sm sm;
+![self_transition](http://www.plantuml.com/plantuml/proxy?cache=no&src=https://raw.githubusercontent.com/jfayot/dynamic-state-machine/master/resources/self_transition.puml)
 
-    sm.addState<s0, Entry>();
-    sm.addState<s1>();
-    sm.addTransition<s0, e1, s0, &s0::onEvent1, s1>();
-
-    sm.start();
-    sm.processEvent(e1{});
-
-    return 0;
-}
-```
+[self_transition.cpp](./examples/self_transition/self_transition.cpp)
