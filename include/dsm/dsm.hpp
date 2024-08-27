@@ -237,11 +237,11 @@ namespace dsm
         std::string demangle(const char* name)
         {
             std::string res;
-            int status{ 0 };
 
             // Demangle the type name if using non-portable GNU extensions.
 #ifdef HAS_GNU_EXTENSIONS_
-            char* ret = abi::__cxa_demangle(name, nullptr, nullptr, &status);
+            int status{0};
+            char *ret = abi::__cxa_demangle(name, nullptr, nullptr, &status);
             if (ret != nullptr)
             {
                 res = ret;
@@ -1902,7 +1902,7 @@ namespace dsm
          */
         auto store()
         {
-            return topSm() != nullptr ? topSm()->store() : nullptr;
+            return topSm() != nullptr ? topSm()->m_store : nullptr;
         }
 
         /**
@@ -1912,7 +1912,7 @@ namespace dsm
          */
         const auto store() const
         {
-            return topSm() != nullptr ? topSm()->store() : nullptr;
+            return topSm() != nullptr ? topSm()->m_store : nullptr;
         }
 
         /**
@@ -2294,7 +2294,7 @@ namespace dsm
         }
 
     protected:
-        StateMachine(const std::string& name = details::Name<SmType>())
+        explicit StateMachine(const std::string& name = details::Name<SmType>())
             : State<SmType, SmType>{}
             , m_store{ new StoreType() }
         {
@@ -2317,26 +2317,6 @@ namespace dsm
         }
 
     public:
-        /**
-         * @brief   store
-         * @details Provides the state machine's local storage
-         * @return  Reference to the state machine's local storage
-         */
-        StoreType* store()
-        {
-            return m_store;
-        }
-
-        /**
-         * @brief   store
-         * @details Provides the state machine's local storage
-         * @return  Const reference to the state machine's local storage
-         */
-        const StoreType* store() const
-        {
-            return m_store;
-        }
-
         /**
          * @brief           visit
          * @param[in,out]   visitor: applied visitor
