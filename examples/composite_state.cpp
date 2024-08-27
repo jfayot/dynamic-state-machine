@@ -1,24 +1,24 @@
 #define DSM_LOGGER Log::ConsoleLogger
 
 #include "dsm/dsm.hpp"
-#include <cassert>
-#include <iostream>
 
 using namespace dsm;
 
 struct e1 : Event<e1>{};
 
 struct sm : StateMachine<sm>{};
-struct s0 : State<s0, sm>{
-    void onEvent1(const e1& evt) { std::cout << "Received event " << evt.name() << std::endl; }
-};
+struct s0 : State<s0, sm>{};
+struct s1 : State<s1, sm>{};
+struct s2 : State<s2, sm>{};
 
 int main()
 {
     sm sm;
 
     sm.addState<s0, Entry>();
-    sm.addTransition<s0, e1, s0, &s0::onEvent1>();
+    sm.addState<s0, s1, Entry>();
+    sm.addState<s0, s2>();
+    sm.addTransition<s1, e1, s2>();
 
     sm.start();
     sm.processEvent(e1{});

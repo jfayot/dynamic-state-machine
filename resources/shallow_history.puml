@@ -1,0 +1,11 @@
+@startuml
+hide empty description
+[*] -right-> s0
+s0 -right-> s1[H] : e0
+s1 -left-> s0 : e1
+state s1 {
+  [*] -right-> s2
+  s2 -right-> s3 : e2
+  s3 -left-> s2 : e3
+}
+@enduml

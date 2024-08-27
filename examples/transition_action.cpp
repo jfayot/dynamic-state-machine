@@ -1,3 +1,5 @@
+#define DSM_LOGGER Log::ConsoleLogger
+
 #include "dsm/dsm.hpp"
 #include <cassert>
 #include <iostream>

@@ -1,3 +1,5 @@
+#define DSM_LOGGER Log::ConsoleLogger
+
 #include "dsm/dsm.hpp"
 #include <cassert>
 #include <iostream>
@@ -12,7 +14,11 @@ struct e1 : Event<e1>{
 struct sm : StateMachine<sm>{};
 struct s0 : State<s0, sm>{
     void onEvent1(const e1& evt) { std::cout << "Received event " << evt.name() << std::endl; }
-    bool guard(const e1& evt) { return evt.guard_flag; }
+    bool guard(const e1& evt)
+    {
+        std::cout << "Guard " << (evt.guard_flag ? "accepted" : "rejected") << std::endl;
+        return evt.guard_flag;
+    }
 };
 struct s1 : State<s1, sm>{};
 
