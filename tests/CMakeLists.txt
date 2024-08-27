@@ -9,8 +9,8 @@ add_executable(tests
 target_link_libraries(tests
   PRIVATE
     dsm::dsm
-    gtest
-    gmock
+    gtest_main
+    gmock_main
 )
 
 if (ENABLE_DSM_COVERAGE)

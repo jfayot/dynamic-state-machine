@@ -628,14 +628,17 @@ TEST_F(DsmFixture, test_post_event_on_entry)
     s0* _s0 = _sm.getState<s0>();
     s1* _s1 = _sm.getState<s1>();
 
+    bool event1Reached = false;
+
     ON_CALL(*_s0, onEvent0(_)).WillByDefault(Invoke([&] () { _s0->transit<s1>(); }));
     ON_CALL(*_s1, onEntry()).WillByDefault(Invoke([&] () { _s1->postEvent(e1{}); }));
-    ON_CALL(*_s1, onEvent1(_)).WillByDefault(Invoke([&] () { std::cout << "toto" << std::endl; }));
+    ON_CALL(*_s1, onEvent1(_)).WillByDefault(Invoke([&] () { event1Reached = true; }));
 
     _sm.start();
     _sm.processEvent(e0{});
 
     ASSERT_TRUE((_sm.checkStates<s1>()));
+    ASSERT_TRUE(event1Reached);
 }
 
 TEST_F(DsmFixture, test_error_on_entry)

@@ -1,8 +1,6 @@
 #define DSM_LOGGER Log::ConsoleLogger
 
 #include "dsm/dsm.hpp"
-#include <cassert>
-#include <iostream>
 
 using namespace dsm;
 
@@ -28,6 +26,8 @@ int main()
 
     sm.start();
     sm.processEvent(e1{});
+
+    std::cout << sm << std::endl;
 
     return 0;
 }

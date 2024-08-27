@@ -1,7 +1,6 @@
 #define DSM_LOGGER Log::ConsoleLogger
 
 #include "dsm/dsm.hpp"
-#include <cassert>
 
 using namespace dsm;
 
@@ -26,10 +25,8 @@ int main()
     sm.setup();
 
     sm.start();
-    assert(sm.checkStates<s0>());
-    std::cout << sm << std::endl;
     sm.processEvent(e1{});
-    assert(sm.checkStates<s1>());
+
     std::cout << sm << std::endl;
 
     return 0;

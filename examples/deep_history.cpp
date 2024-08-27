@@ -37,7 +37,7 @@ int main()
     sm.addTransition<s4, e4, s5>();
     sm.addTransition<s5, e5, s4>();
 
-    sm.setHistory<s1>(History::Shallow);
+    sm.setHistory<s1>(History::Deep);
 
     sm.start();
     sm.processEvent(e0{});

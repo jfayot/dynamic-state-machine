@@ -1,7 +1,7 @@
 @startuml
 hide empty description
 [*] -right-> s0
-s0 -right-> s1[H] : e0
+s0 -right-> s1[H*] : e0
 s1 -left-> s0 : e1
 state s1 {
   [*] -right-> s2

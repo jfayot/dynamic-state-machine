@@ -23,5 +23,7 @@ int main()
     sm.start();
     sm.processEvent(e1{});
 
+    std::cout << sm << std::endl;
+
     return 0;
 }
