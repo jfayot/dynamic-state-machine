@@ -33,9 +33,7 @@ jobs:
       run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
 
     - name: Test
-      run: |
-        cd build
-        ctest --build-config ${{env.BUILD_TYPE}} --output-on-failure
+      run: ctest --test-dir ${{github.workspace}}/build/tests --build-config ${{env.BUILD_TYPE}} --output-on-failure
 
     - name: Codecov
       run: bash <(curl -s https://codecov.io/bash) || echo "Codecov did not collect coverage reports"
