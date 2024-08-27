@@ -96,7 +96,7 @@ add_executable(your_target ${CMAKE_CURRENT_LIST_DIR}/main.cpp)
 target_link_libraries(your_target PRIVATE dsm::dsm)
 ```
 
-## Minimal examples
+## Basic example
 
 Considering the following minimal state machine, it can be coded as follows:
 
@@ -174,26 +174,11 @@ int main()
 }
 ```
 
-## Specify entry/exit actions
+## Other examples
 
-![entry_exit_actions](http://www.plantuml.com/plantuml/proxy?cache=no&src=https://raw.githubusercontent.com/jfayot/dynamic-state-machine/master/resources/entry_exit_actions.puml)
-
-[entry_exit_actions.cpp](./examples/entry_exit_actions.cpp)
-
-## Transition action
-
-![transition_action](http://www.plantuml.com/plantuml/proxy?cache=no&src=https://raw.githubusercontent.com/jfayot/dynamic-state-machine/master/resources/transition_action.puml)
-
-[transition_action.cpp](./examples/transition_action.cpp)
-
-## Transition guard
-
-![transition_guard](http://www.plantuml.com/plantuml/proxy?cache=no&src=https://raw.githubusercontent.com/jfayot/dynamic-state-machine/master/resources/transition_guard.puml)
-
-[transition_guard.cpp](./examples/transition_guard.cpp)
-
-## Self transition
-
-![self_transition](http://www.plantuml.com/plantuml/proxy?cache=no&src=https://raw.githubusercontent.com/jfayot/dynamic-state-machine/master/resources/self_transition.puml)
-
-[self_transition.cpp](./examples/self_transition.cpp)
+| Title              | UML | Source file |
+| ------------------ | --- | ----------- |
+| entry/exit actions | ![entry_exit_actions](http://www.plantuml.com/plantuml/proxy?cache=no&src=https://raw.githubusercontent.com/jfayot/dynamic-state-machine/master/resources/entry_exit_actions.puml) | [transition_action.cpp](./examples/transition_action.cpp) |
+| transition action  | ![transition_action](http://www.plantuml.com/plantuml/proxy?cache=no&src=https://raw.githubusercontent.com/jfayot/dynamic-state-machine/master/resources/transition_action.puml) | [transition_action.cpp](./examples/transition_action.cpp) |
+| transition guard   | ![transition_guard](http://www.plantuml.com/plantuml/proxy?cache=no&src=https://raw.githubusercontent.com/jfayot/dynamic-state-machine/master/resources/transition_guard.puml) | [transition_guard.cpp](./examples/transition_guard.cpp) |
+| self transition    | ![self_transition](http://www.plantuml.com/plantuml/proxy?cache=no&src=https://raw.githubusercontent.com/jfayot/dynamic-state-machine/master/resources/self_transition.puml) | [self_transition.cpp](./examples/self_transition.cpp) |

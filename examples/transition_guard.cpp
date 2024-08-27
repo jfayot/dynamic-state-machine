@@ -6,7 +6,7 @@ using namespace dsm;
 
 struct e1 : Event<e1>{
     bool guard_flag;
-    e1(bool guard_flag) : guard_flag{ guard_flag } {}
+    explicit e1(bool guard_flag) : guard_flag{ guard_flag } {}
 };
 
 struct sm : StateMachine<sm>{};
