@@ -93,7 +93,7 @@ namespace dsm
 
         try
         {
-            std::rethrow_exception(eptr);
+            std::rethrow_exception(std::move(eptr));
         }
         catch (const std::exception& ex)
         {
@@ -1129,7 +1129,7 @@ namespace dsm
          */
         virtual void onError(std::exception_ptr eptr)
         {
-            LOG_ERROR_DSM(what(eptr));
+            LOG_ERROR_DSM(what(std::move(eptr)));
         }
 
         /**
